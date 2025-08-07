@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'leaflet/dist/leaflet.css';
+
+:root {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  
+  --primary-yellow: #ffd02e;
+  --black: #1a1a1a;
+  --white: #ffffff;
+  --gray: #333333;
+  --light-gray: #f0f0f3;
+  --dark-gray: #e4e4e7;
+  --shadow-light: #ffffff;
+  --shadow-dark: #d1d1d4;
+  --bg-neumorphic: #f0f0f3;
+  --danger: #ff4757;
+  --success: #2ed573;
+  --route-pending: #81C784;
+  --route-completed: #1565C0;
+
+  color-scheme: light;
+  color: var(--black);
+  background-color: var(--bg-neumorphic);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--bg-neumorphic);
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Neumorphic styles */
+.neumorphic {
+  background: var(--bg-neumorphic);
+  box-shadow: 8px 8px 16px var(--shadow-dark), 
+              -8px -8px 16px var(--shadow-light);
+  border-radius: 16px;
+}
+
+.neumorphic-inset {
+  background: var(--bg-neumorphic);
+  box-shadow: inset 4px 4px 8px var(--shadow-dark), 
+              inset -4px -4px 8px var(--shadow-light);
+  border-radius: 12px;
+}
+
+.neumorphic-button {
+  background: var(--bg-neumorphic);
+  box-shadow: 4px 4px 8px var(--shadow-dark), 
+              -4px -4px 8px var(--shadow-light);
+  border: none;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.neumorphic-button:hover {
+  box-shadow: 6px 6px 12px var(--shadow-dark), 
+              -6px -6px 12px var(--shadow-light);
+}
+
+.neumorphic-button:active {
+  box-shadow: inset 2px 2px 4px var(--shadow-dark), 
+              inset -2px -2px 4px var(--shadow-light);
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  font-family: inherit;
+}
+
+/* Custom marker animations */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.custom-incident-marker {
+  animation: pulse 2s infinite;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--light-gray);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-yellow);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e6b800;
+}
