@@ -1,8 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
 
-@import 'leaflet/dist/leaflet.css';
+/* Leaflet CSS via CDN en el HTML */
 
 :root {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -52,45 +52,6 @@ body {
 #root {
   width: 100%;
   min-height: 100vh;
-}
-
-/* Neumorphic styles */
-.neumorphic {
-  background: var(--bg-neumorphic);
-  box-shadow: 8px 8px 16px var(--shadow-dark), 
-              -8px -8px 16px var(--shadow-light);
-  border-radius: 16px;
-}
-
-.neumorphic-inset {
-  background: var(--bg-neumorphic);
-  box-shadow: inset 4px 4px 8px var(--shadow-dark), 
-              inset -4px -4px 8px var(--shadow-light);
-  border-radius: 12px;
-}
-
-.neumorphic-button {
-  background: var(--bg-neumorphic);
-  box-shadow: 4px 4px 8px var(--shadow-dark), 
-              -4px -4px 8px var(--shadow-light);
-  border: none;
-  border-radius: 12px;
-  transition: all 0.2s ease;
-}
-
-.neumorphic-button:hover {
-  box-shadow: 6px 6px 12px var(--shadow-dark), 
-              -6px -6px 12px var(--shadow-light);
-}
-
-.neumorphic-button:active {
-  box-shadow: inset 2px 2px 4px var(--shadow-dark), 
-              inset -2px -2px 4px var(--shadow-light);
-}
-
-/* Leaflet overrides */
-.leaflet-container {
-  font-family: inherit;
 }
 
 /* Custom marker animations */
