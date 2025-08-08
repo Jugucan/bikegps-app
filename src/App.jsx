@@ -73,10 +73,15 @@ const BikeGPSApp = () => {
     try {
       const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
       
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(map);
-
+      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        crossOrigin: true
+      });
+      
+      tileLayer.addTo(map);
+      console.log('🗺️ Mapa carregat:', tileLayer);
+      
       mapInstanceRef.current = map;
       createCustomIcons();
     } catch (error) {
@@ -1191,5 +1196,6 @@ const BikeGPSApp = () => {
     </div>
   );
 };
+
 
 export default BikeGPSApp;
