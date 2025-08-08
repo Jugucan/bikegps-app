@@ -22,6 +22,17 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
+// Afegeix això dins del teu component App, després dels imports
+useEffect(() => {
+  console.log('🔧 App.jsx Debug:');
+  console.log('- auth object:', auth);
+  console.log('- db object:', db);
+  console.log('- Variables env:', {
+    api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
+    domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
+  });
+}, []);
+
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
 
 const BikeGPSApp = () => {
@@ -1199,3 +1210,4 @@ const BikeGPSApp = () => {
 
 
 export default BikeGPSApp;
+
