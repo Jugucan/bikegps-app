@@ -131,13 +131,22 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
 
-  // Initialize map - VERSIÓ CORREGIDA
+// Initialize map - VERSIÓ AMB ESPERA
 useEffect(() => {
   console.log('🗺️ Intentant crear mapa...');
   console.log('- mapRef.current:', mapRef.current);
   console.log('- mapInstanceRef.current:', mapInstanceRef.current);
   
-  if (!mapRef.current || mapInstanceRef.current) return;
+  // ESPERA QUE EL CONTENIDOR ESTIGUI DISPONIBLE
+  if (!mapRef.current) {
+    console.log('⏳ Contenidor no disponible encara, esperant...');
+    return;
+  }
+  
+  if (mapInstanceRef.current) {
+    console.log('🗺️ Mapa ja creat, sortint...');
+    return;
+  }
   
   try {
     console.log('🗺️ Creant mapa...');
@@ -153,20 +162,26 @@ useEffect(() => {
     console.log('✅ Mapa carregat correctament');
     
     mapInstanceRef.current = map;
-    createCustomIcons();
+    
+    // Comprova si createCustomIcons existeix abans de cridar-la
+    if (typeof createCustomIcons === 'function') {
+      createCustomIcons();
+    }
   } catch (error) {
     console.error('❌ Error initializing map:', error);
-    showNotification('Error carregant mapa', 'error');
+    if (typeof showNotification === 'function') {
+      showNotification('Error carregant mapa', 'error');
+    }
   }
 
-  // CLEANUP FUNCTION - HA D'ESTAR DINS DEL useEffect
   return () => {
     if (mapInstanceRef.current) {
+      console.log('🧹 Netejant mapa...');
       mapInstanceRef.current.remove();
       mapInstanceRef.current = null;
     }
   };
-}, []); // ← UN SOL TANCAMENT
+}); // ← SENSE DEPENDÈNCIES per que es re-executi quan canviï qualsevol cosa
 
 // Load data when user changes
 useEffect(() => {
@@ -1270,6 +1285,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
