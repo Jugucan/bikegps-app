@@ -77,6 +77,17 @@ useEffect(() => {
     );
   }
 }, []);
+
+// Debug d'autenticació - AFEGEIX DESPRÉS DELS ALTRES useEffect
+useEffect(() => {
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      console.log('✅ Usuari connectat:', user.email);
+    } else {
+      console.log('❌ Cap usuari connectat');
+    }
+  });
+}, []);
   
   // Initialize auth listener
   useEffect(() => {
@@ -1228,6 +1239,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
