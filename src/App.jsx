@@ -1135,29 +1135,7 @@ useEffect(() => {
               </div>
             </div>
           </div>
-
-          {/* Map Section */}
-          <div className="bg-white rounded-2xl shadow-lg p-6">
-            <h3 className="text-lg font-bold mb-4 border-b-2 border-yellow-500 pb-2">
-              Mapa de Seguiment
-            </h3>
-            <div className="relative">
-              <div 
-                ref={mapRef} 
-                className="h-96 w-full rounded-xl"
-                style={{ minHeight: '500px' }}
-              ></div>
-              {currentRoute && (
-                <div className="absolute top-4 left-4 bg-white bg-opacity-95 px-4 py-2 rounded-xl shadow-lg">
-                  <span className="text-sm font-medium">
-                    Ruta: {currentRoute.name} - {isReturning ? 'Tornant' : 'Anant'} - {Math.round(routeProgress * 100)}% completat
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
+          
         {/* Notification */}
         {notification && (
           <div className={`fixed top-20 right-4 p-4 rounded-xl shadow-lg z-50 max-w-sm ${
@@ -1285,6 +1263,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
