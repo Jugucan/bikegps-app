@@ -103,6 +103,16 @@ useEffect(() => {
   console.log('- L.map function:', typeof L.map);
   console.log('- L.tileLayer function:', typeof L.tileLayer);
 }, []);
+
+  // Alternativa amb timeout
+useEffect(() => {
+  const timer = setTimeout(() => {
+    console.log('🗺️ Intentant crear mapa amb delay...');
+    // ... el codi del mapa aquí
+  }, 100); // Espera 100ms
+
+  return () => clearTimeout(timer);
+}, []);
   
   // Initialize auth listener
   useEffect(() => {
@@ -1260,6 +1270,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
