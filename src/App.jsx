@@ -88,6 +88,21 @@ useEffect(() => {
     }
   });
 }, []);
+
+  // Debug del contenidor del mapa
+useEffect(() => {
+  console.log('🗺️ Verificant contenidor...');
+  const mapContainer = document.getElementById('map'); // o la ID que usis
+  console.log('- Contenidor trobat:', mapContainer);
+  console.log('- Dimensions:', mapContainer?.offsetWidth, 'x', mapContainer?.offsetHeight);
+}, []);
+
+  // Debug de Leaflet
+useEffect(() => {
+  console.log('📚 Leaflet disponible:', typeof L);
+  console.log('- L.map function:', typeof L.map);
+  console.log('- L.tileLayer function:', typeof L.tileLayer);
+}, []);
   
   // Initialize auth listener
   useEffect(() => {
@@ -108,26 +123,32 @@ useEffect(() => {
 
   // Initialize map
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
-
-    try {
-      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
-      
-      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19,
-        crossOrigin: true
-      });
-      
-      tileLayer.addTo(map);
-      console.log('🗺️ Mapa carregat:', tileLayer);
-      
-      mapInstanceRef.current = map;
-      createCustomIcons();
-    } catch (error) {
-      console.error('Error initializing map:', error);
-      showNotification('Error carregant mapa', 'error');
-    }
+  console.log('🗺️ Intentant crear mapa...');
+  console.log('- mapRef.current:', mapRef.current);
+  console.log('- mapInstanceRef.current:', mapInstanceRef.current);
+  
+  if (!mapRef.current || mapInstanceRef.current) return;
+  
+  try {
+    console.log('🗺️ Creant mapa...');
+    const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+    
+    const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+      crossOrigin: true
+    });
+    
+    tileLayer.addTo(map);
+    console.log('✅ Mapa carregat correctament');
+    
+    mapInstanceRef.current = map;
+    createCustomIcons();
+  } catch (error) {
+    console.error('❌ Error initializing map:', error);
+    showNotification('Error carregant mapa', 'error');
+  }
+}, []);  // ← Assegura't que té les dependències correctes
 
     return () => {
       if (mapInstanceRef.current) {
@@ -1239,6 +1260,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
