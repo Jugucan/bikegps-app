@@ -22,17 +22,6 @@ import {
   serverTimestamp 
 } from 'firebase/firestore';
 
-// Afegeix aquest codi després dels imports i abans de tot el demés
-useEffect(() => {
-  console.log('🔧 App.jsx Debug:');
-  console.log('- auth object:', auth);
-  console.log('- db object:', db);
-  console.log('- Variables env:', {
-    api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
-    domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
-  });
-}, []);
-
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
 
 const BikeGPSApp = () => {
@@ -60,6 +49,17 @@ const BikeGPSApp = () => {
   const routePolylinesRef = useRef([]);
   const hasSetInitialLocationRef = useRef(false);
 
+// Afegeix aquest codi després dels imports i abans de tot el demés
+useEffect(() => {
+  console.log('🔧 App.jsx Debug:');
+  console.log('- auth object:', auth);
+  console.log('- db object:', db);
+  console.log('- Variables env:', {
+    api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
+    domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
+  });
+}, []);
+  
   // Initialize auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -1210,6 +1210,7 @@ const BikeGPSApp = () => {
 
 
 export default BikeGPSApp;
+
 
 
 
