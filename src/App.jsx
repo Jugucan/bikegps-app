@@ -59,6 +59,24 @@ useEffect(() => {
     domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
   });
 }, []);
+
+  // Test de geolocalització - AFEGEIX AQUÍ
+useEffect(() => {
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('📍 Localització obtinguda:', {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+      },
+      (error) => {
+        console.error('❌ Error geolocalització:', error.message);
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+  }
+}, []);
   
   // Initialize auth listener
   useEffect(() => {
@@ -1210,6 +1228,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
