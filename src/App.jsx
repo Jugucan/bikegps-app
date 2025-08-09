@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { auth, db } from './firebase';
+import { auth, db } from './firebase-config';
 import { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
@@ -1199,5 +1199,6 @@ const BikeGPSApp = () => {
 
 
 export default BikeGPSApp;
+
 
 
