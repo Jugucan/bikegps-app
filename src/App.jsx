@@ -121,8 +121,8 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
 
-  // Initialize map
-  useEffect(() => {
+  // Initialize map - VERSIÓ CORREGIDA
+useEffect(() => {
   console.log('🗺️ Intentant crear mapa...');
   console.log('- mapRef.current:', mapRef.current);
   console.log('- mapInstanceRef.current:', mapInstanceRef.current);
@@ -148,34 +148,34 @@ useEffect(() => {
     console.error('❌ Error initializing map:', error);
     showNotification('Error carregant mapa', 'error');
   }
-}, []);  // ← Assegura't que té les dependències correctes
 
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  }, []);
-
-  // Load data when user changes
-  useEffect(() => {
-    if (currentUser) {
-      loadRoutes();
-      if (isAdmin) {
-        listenToUsers();
-        listenToIncidents();
-      }
-      startLocationTracking();
+  // CLEANUP FUNCTION - HA D'ESTAR DINS DEL useEffect
+  return () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
     }
-    
-    return () => {
-      if (watchIdRef.current) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-    };
-  }, [currentUser, isAdmin]);
+  };
+}, []); // ← UN SOL TANCAMENT
+
+// Load data when user changes
+useEffect(() => {
+  if (currentUser) {
+    loadRoutes();
+    if (isAdmin) {
+      listenToUsers();
+      listenToIncidents();
+    }
+    startLocationTracking();
+  }
+  
+  return () => {
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  };
+}, [currentUser, isAdmin]);
 
   const checkAdminStatus = async (user) => {
     try {
@@ -1260,6 +1260,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
