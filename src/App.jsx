@@ -131,23 +131,25 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
 
-// Initialize map - VERSIÓ ESTABLE
+// Initialize map - VERSIÓ AMB ESPERA
 useEffect(() => {
-  // Si ja tenim un mapa, no fem res
-  if (mapInstanceRef.current) {
-    console.log('🗺️ Mapa ja existeix, sortint...');
-    return;
-  }
-
-  // Si no tenim contenidor, esperem
+  console.log('🗺️ Intentant crear mapa...');
+  console.log('- mapRef.current:', mapRef.current);
+  console.log('- mapInstanceRef.current:', mapInstanceRef.current);
+  
+  // ESPERA QUE EL CONTENIDOR ESTIGUI DISPONIBLE
   if (!mapRef.current) {
-    console.log('⏳ Contenidor no disponible, esperant...');
+    console.log('⏳ Contenidor no disponible encara, esperant...');
     return;
   }
   
-  console.log('🗺️ Creant nou mapa...');
+  if (mapInstanceRef.current) {
+    console.log('🗺️ Mapa ja creat, sortint...');
+    return;
+  }
   
   try {
+    console.log('🗺️ Creant mapa...');
     const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
     
     const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -157,28 +159,29 @@ useEffect(() => {
     });
     
     tileLayer.addTo(map);
-    console.log('✅ Mapa creat i configurat');
+    console.log('✅ Mapa carregat correctament');
     
     mapInstanceRef.current = map;
     
-    // Crear icones personalitzades si la funció existeix
+    // Comprova si createCustomIcons existeix abans de cridar-la
     if (typeof createCustomIcons === 'function') {
       createCustomIcons();
     }
-    
   } catch (error) {
-    console.error('❌ Error creant mapa:', error);
+    console.error('❌ Error initializing map:', error);
+    if (typeof showNotification === 'function') {
+      showNotification('Error carregant mapa', 'error');
+    }
   }
 
-  // Cleanup només quan el component es desmunti
   return () => {
     if (mapInstanceRef.current) {
-      console.log('🧹 Desmuntant mapa (component cleanup)');
+      console.log('🧹 Netejant mapa...');
       mapInstanceRef.current.remove();
       mapInstanceRef.current = null;
     }
   };
-}, []); // DEPENDÈNCIES BUIDES - només s'executa un cop
+}); // ← SENSE DEPENDÈNCIES per que es re-executi quan canviï qualsevol cosa
 
 // Load data when user changes
 useEffect(() => {
@@ -1260,6 +1263,7 @@ useEffect(() => {
 
 
 export default BikeGPSApp;
+
 
 
 
