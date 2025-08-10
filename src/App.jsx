@@ -109,52 +109,61 @@ useEffect(() => {
 unsubscribe();
   }, []);
 
-// SUBSTITUEIX el useEffect del mapa per aquest:
+// SUBSTITUEIX completament el useEffect del mapa per aquest codi:
+
+// Crear mapa quan l'usuari es connecti i el component estigui llest
 useEffect(() => {
-  console.log('🗺️ Intentant crear mapa...');
-  console.log('- mapRef.current:', mapRef.current);
-  console.log('- mapInstanceRef.current:', mapInstanceRef.current);
-  
-  // Si ja tenim el mapa creat, no fer res
-  if (mapInstanceRef.current) {
-    console.log('🗺️ Mapa ja creat, sortint...');
+  if (!currentUser) {
+    console.log('❌ No hi ha usuari connectat, no crear mapa');
     return;
   }
-  
-  // Si no tenim el contenidor, programar un retry
-  if (!mapRef.current) {
-    console.log('⏳ Contenidor no disponible encara, reintentant...');
-    const timer = setTimeout(() => {
-      // Forçar un re-render per tornar a intentar
-      setLoading(prev => prev); // Trigger re-render sense canviar l'estat
-    }, 100);
-    return () => clearTimeout(timer);
-  }
-  
-  try {
-    console.log('🗺️ Creant mapa...');
-    const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
-    
-    const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19,
-      crossOrigin: true
-    });
-    
-    tileLayer.addTo(map);
-    console.log('✅ Mapa carregat correctament');
-    
-    mapInstanceRef.current = map;
-    
-    // Crear les icones personalitzades
-    createCustomIcons();
-    
-  } catch (error) {
-    console.error('❌ Error initializing map:', error);
-    showNotification('Error carregant mapa', 'error');
-  }
 
-}, [currentUser]); // Executar quan canvia currentUser (quan es logueja)
+  console.log('🗺️ Usuari connectat, intentant crear mapa...');
+  
+  // Esperar un moment per assegurar que el DOM està llest
+  const timer = setTimeout(() => {
+    console.log('🗺️ Intentant crear mapa amb delay...');
+    console.log('- mapRef.current:', mapRef.current);
+    console.log('- mapInstanceRef.current:', mapInstanceRef.current);
+    
+    // Si ja tenim el mapa creat, no fer res
+    if (mapInstanceRef.current) {
+      console.log('🗺️ Mapa ja creat, sortint...');
+      return;
+    }
+    
+    // Si no tenim el contenidor, mostrar error
+    if (!mapRef.current) {
+      console.log('❌ Contenidor encara no disponible');
+      return;
+    }
+    
+    try {
+      console.log('🗺️ Creant mapa ara...');
+      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+      
+      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        crossOrigin: true
+      });
+      
+      tileLayer.addTo(map);
+      console.log('✅ Mapa carregat correctament');
+      
+      mapInstanceRef.current = map;
+      
+      // Crear les icones personalitzades
+      createCustomIcons();
+      
+    } catch (error) {
+      console.error('❌ Error initializing map:', error);
+      showNotification('Error carregant mapa', 'error');
+    }
+  }, 500); // Esperem mig segon
+  
+  return () => clearTimeout(timer);
+}, [currentUser]); // Només quan canvia currentUser
 
 // Neteja del mapa quan es desmunta el component
 useEffect(() => {
@@ -1271,6 +1280,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
