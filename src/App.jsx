@@ -149,12 +149,23 @@ useEffect(() => {
       });
       
       tileLayer.addTo(map);
-      console.log('✅ Mapa carregat correctament');
-      
-      mapInstanceRef.current = map;
-      
-      // Crear les icones personalitzades
-      createCustomIcons();
+// Al useEffect del mapa, després de crear el mapa, AFEGEIX això:
+console.log('✅ Mapa carregat correctament');
+
+mapInstanceRef.current = map;
+
+// Crear les icones personalitzades SEMPRE
+console.log('🎨 Creant icones personalitzades...');
+createCustomIcons();
+
+// Verificar que s'han creat correctament
+setTimeout(() => {
+  console.log('🔍 Verificant icones:', {
+    userIcon: !!window.userIcon,
+    currentUserIcon: !!window.currentUserIcon,
+    incidentIcon: !!window.incidentIcon
+  });
+}, 100);
       
     } catch (error) {
       console.error('❌ Error initializing map:', error);
@@ -1328,6 +1339,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
