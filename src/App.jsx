@@ -203,20 +203,17 @@ useEffect(() => {
   
 // BUSCA aquest useEffect (aprox. línia 182) i SUBSTITUEIX-LO per aquest:
 
+// BUSCA el useEffect que carrega dades (el que té loadRoutes, listenToUsers, etc) 
+// i SUBSTITUEIX-LO per aquest MÉS SIMPLE:
+
 useEffect(() => {
   if (currentUser) {
+    console.log('📚 Carregant rutes per usuari connectat...');
     loadRoutes();
-    
-    // TOTS els usuaris poden veure ubicacions d'altres usuaris
-    listenToUsers();
-    
-    // Només els admins poden veure incidències
-    if (isAdmin) {
-      listenToIncidents();
-    }
     
     // Només inicia el seguiment si no està ja actiu
     if (!watchIdRef.current) {
+      console.log('📍 Iniciant seguiment ubicació...');
       startLocationTracking();
     }
   }
@@ -228,8 +225,9 @@ useEffect(() => {
       watchIdRef.current = null;
     }
   };
-}, [currentUser, isAdmin]); // Dependències correctes
-  const checkAdminStatus = async (user) => {
+}, [currentUser]); // Només quan canvia currentUser 
+  
+    const checkAdminStatus = async (user) => {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
@@ -1393,6 +1391,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
