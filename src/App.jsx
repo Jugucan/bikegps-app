@@ -1135,6 +1135,7 @@ className="flex mb-6 rounded-2xl overflow-hidden bg-gray-100">
           {/* Map */}
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
             <div 
+              id="map"
               ref={mapRef} 
               className="w-full"
               style={{ height: '500px' }}
@@ -1222,6 +1223,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div className="relative">
               <div 
+                id="map"
                 ref={mapRef} 
                 className="w-full"
                 style={{ height: 'calc(100vh - 200px)', minHeight: '500px' }}
@@ -1269,6 +1271,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
