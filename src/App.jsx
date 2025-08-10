@@ -49,70 +49,64 @@ const BikeGPSApp = () => {
   const routePolylinesRef = useRef([]);
   const hasSetInitialLocationRef = useRef(false);
 
-// Afegeix aquest codi després dels imports i abans de tot el demés
-useEffect(() => {
-  console.log('🔧 App.jsx Debug:');
-  console.log('- auth object:', auth);
-  console.log('- db object:', db);
-  console.log('- Variables env:', {
-    api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
-    domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
-  });
-}, []);
+  // Debug effects
+  useEffect(() => {
+    console.log('🔧 App.jsx Debug:');
+    console.log('- auth object:', auth);
+    console.log('- db object:', db);
+    console.log('- Variables env:', {
+      api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
+      domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
+    });
+  }, []);
 
-  // Test de geolocalització - AFEGEIX AQUÍ
-useEffect(() => {
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        console.log('📍 Localització obtinguda:', {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-      },
-      (error) => {
-        console.error('❌ Error geolocalització:', error.message);
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
-  }
-}, []);
-
-// Debug d'autenticació - AFEGEIX DESPRÉS DELS ALTRES useEffect
-useEffect(() => {
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      console.log('✅ Usuari connectat:', user.email);
-    } else {
-      console.log('❌ Cap usuari connectat');
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('📍 Localització obtinguda:', {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('❌ Error geolocalització:', error.message);
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
     }
-  });
-}, []);
+  }, []);
 
-  // Debug del contenidor del mapa
-useEffect(() => {
-  console.log('🗺️ Verificant contenidor...');
-  const mapContainer = document.getElementById('map'); // o la ID que usis
-  console.log('- Contenidor trobat:', mapContainer);
-  console.log('- Dimensions:', mapContainer?.offsetWidth, 'x', mapContainer?.offsetHeight);
-}, []);
+  useEffect(() => {
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        console.log('✅ Usuari connectat:', user.email);
+      } else {
+        console.log('❌ Cap usuari connectat');
+      }
+    });
+  }, []);
 
-  // Debug de Leaflet
-useEffect(() => {
-  console.log('📚 Leaflet disponible:', typeof L);
-  console.log('- L.map function:', typeof L.map);
-  console.log('- L.tileLayer function:', typeof L.tileLayer);
-}, []);
+  useEffect(() => {
+    console.log('🗺️ Verificant contenidor...');
+    const mapContainer = document.getElementById('map');
+    console.log('- Contenidor trobat:', mapContainer);
+    console.log('- Dimensions:', mapContainer?.offsetWidth, 'x', mapContainer?.offsetHeight);
+  }, []);
 
-  // Alternativa amb timeout
-useEffect(() => {
-  const timer = setTimeout(() => {
-    console.log('🗺️ Intentant crear mapa amb delay...');
-    // ... el codi del mapa aquí
-  }, 100); // Espera 100ms
+  useEffect(() => {
+    console.log('📚 Leaflet disponible:', typeof L);
+    console.log('- L.map function:', typeof L.map);
+    console.log('- L.tileLayer function:', typeof L.tileLayer);
+  }, []);
 
-  return () => clearTimeout(timer);
-}, []);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      console.log('🗺️ Intentant crear mapa amb delay...');
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
   
   // Initialize auth listener
   useEffect(() => {
@@ -131,76 +125,74 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
 
-// Initialize map - VERSIÓ AMB ESPERA
-useEffect(() => {
-  console.log('🗺️ Intentant crear mapa...');
-  console.log('- mapRef.current:', mapRef.current);
-  console.log('- mapInstanceRef.current:', mapInstanceRef.current);
-  
-  // ESPERA QUE EL CONTENIDOR ESTIGUI DISPONIBLE
-  if (!mapRef.current) {
-    console.log('⏳ Contenidor no disponible encara, esperant...');
-    return;
-  }
-  
-  if (mapInstanceRef.current) {
-    console.log('🗺️ Mapa ja creat, sortint...');
-    return;
-  }
-  
-  try {
-    console.log('🗺️ Creant mapa...');
-    const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+  // Initialize map
+  useEffect(() => {
+    console.log('🗺️ Intentant crear mapa...');
+    console.log('- mapRef.current:', mapRef.current);
+    console.log('- mapInstanceRef.current:', mapInstanceRef.current);
     
-    const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19,
-      crossOrigin: true
-    });
-    
-    tileLayer.addTo(map);
-    console.log('✅ Mapa carregat correctament');
-    
-    mapInstanceRef.current = map;
-    
-    // Comprova si createCustomIcons existeix abans de cridar-la
-    if (typeof createCustomIcons === 'function') {
-      createCustomIcons();
+    if (!mapRef.current) {
+      console.log('⏳ Contenidor no disponible encara, esperant...');
+      return;
     }
-  } catch (error) {
-    console.error('❌ Error initializing map:', error);
-    if (typeof showNotification === 'function') {
-      showNotification('Error carregant mapa', 'error');
-    }
-  }
-
-  return () => {
+    
     if (mapInstanceRef.current) {
-      console.log('🧹 Netejant mapa...');
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
+      console.log('🗺️ Mapa ja creat, sortint...');
+      return;
     }
-  };
-}); // ← SENSE DEPENDÈNCIES per que es re-executi quan canviï qualsevol cosa
+    
+    try {
+      console.log('🗺️ Creant mapa...');
+      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+      
+      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        crossOrigin: true
+      });
+      
+      tileLayer.addTo(map);
+      console.log('✅ Mapa carregat correctament');
+      
+      mapInstanceRef.current = map;
+      
+      if (typeof createCustomIcons === 'function') {
+        createCustomIcons();
+      }
+    } catch (error) {
+      console.error('❌ Error initializing map:', error);
+      if (typeof showNotification === 'function') {
+        showNotification('Error carregant mapa', 'error');
+      }
+    }
 
-// Load data when user changes
-useEffect(() => {
-  if (currentUser) {
-    loadRoutes();
-    if (isAdmin) {
-      listenToUsers();
-      listenToIncidents();
+    return () => {
+      if (mapInstanceRef.current) {
+        console.log('🧹 Netejant mapa...');
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  });
+
+  // Load data when user changes
+  useEffect(() => {
+    if (currentUser) {
+      loadRoutes();
+      if (isAdmin) {
+        listenToUsers();
+        listenToIncidents();
+      }
+      startLocationTracking();
     }
-    startLocationTracking();
-  }
-  
-  return () => {
-    if (watchIdRef.current) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-  };
-}, [currentUser, isAdmin]);
+    
+    return () => {
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [currentUser, isAdmin]);
 
   const checkAdminStatus = async (user) => {
     try {
@@ -251,7 +243,6 @@ useEffect(() => {
   };
 
   const createCustomIcons = () => {
-    // User icon
     window.userIcon = L.divIcon({
       className: 'custom-user-marker',
       html: '<div style="background: linear-gradient(145deg, #ffd02e, #ffcc00); border: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(255,208,46,0.5);"><span style="font-size: 12px; color: #1a1a1a;">👤</span></div>',
@@ -259,7 +250,6 @@ useEffect(() => {
       iconAnchor: [12, 12]
     });
 
-    // Current user icon
     window.currentUserIcon = L.divIcon({
       className: 'custom-current-user-marker',
       html: '<div style="background: linear-gradient(145deg, #2ed573, #26d0ce); border: 3px solid #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46,213,115,0.6);"><span style="font-size: 14px; color: white;">📍</span></div>',
@@ -267,7 +257,6 @@ useEffect(() => {
       iconAnchor: [14, 14]
     });
 
-    // Incident icon
     window.incidentIcon = L.divIcon({
       className: 'custom-incident-marker',
       html: '<div style="background: linear-gradient(145deg, #ff4757, #ff3838); border: 3px solid #fff; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.5); animation: pulse 2s infinite;"><span style="color: white; font-size: 16px;">🚨</span></div>',
@@ -362,7 +351,6 @@ useEffect(() => {
       setUploadProgress(100);
       showNotification('✅ Ruta creada correctament des de GPX!', 'success');
 
-      // Reset form
       e.target.reset();
       
       setTimeout(() => {
@@ -370,7 +358,7 @@ useEffect(() => {
         setUploadProgress(0);
       }, 1000);
 
-      loadRoutes(); // Reload routes
+      loadRoutes();
 
     } catch (error) {
       setShowUploadProgress(false);
@@ -401,7 +389,6 @@ useEffect(() => {
       
       const coordinates = [];
       
-      // Try track points first
       const trackPoints = gpxDoc.querySelectorAll('trkpt');
       if (trackPoints.length > 0) {
         trackPoints.forEach(point => {
@@ -413,7 +400,6 @@ useEffect(() => {
         });
       }
       
-      // Try route points if no track points
       if (coordinates.length === 0) {
         const routePoints = gpxDoc.querySelectorAll('rtept');
         routePoints.forEach(point => {
@@ -425,7 +411,6 @@ useEffect(() => {
         });
       }
       
-      // Try waypoints if still no points
       if (coordinates.length === 0) {
         const waypoints = gpxDoc.querySelectorAll('wpt');
         waypoints.forEach(point => {
@@ -468,7 +453,6 @@ useEffect(() => {
     setIsReturning(false);
     
     if (mapInstanceRef.current && routeData.coordinates) {
-      // Clear existing routes
       clearRoutePolylines();
 
       let leafletCoords;
@@ -508,7 +492,6 @@ useEffect(() => {
         showNotification('Ruta eliminada correctament', 'success');
         loadRoutes();
         
-        // Clear current route if it's the one being deleted
         if (currentRoute?.id === routeId) {
           setCurrentRoute(null);
           clearRoutePolylines();
@@ -529,7 +512,6 @@ useEffect(() => {
         const userId = doc.id;
         const isCurrentUser = userId === currentUser?.uid;
 
-        // Update map markers
         if (userMarkersRef.current[userId]) {
           mapInstanceRef.current?.removeLayer(userMarkersRef.current[userId]);
         }
@@ -548,7 +530,6 @@ useEffect(() => {
           `);
         }
 
-        // Add to users list for admin
         if (isAdmin) {
           usersData.push({
             ...location,
@@ -573,7 +554,6 @@ useEffect(() => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const incidentsData = [];
       
-      // Remove existing incident markers
       if (mapInstanceRef.current) {
         mapInstanceRef.current.eachLayer(layer => {
           if (layer.options && layer.options.className === 'incident-marker') {
@@ -586,7 +566,6 @@ useEffect(() => {
         const incident = { id: doc.id, ...doc.data() };
         incidentsData.push(incident);
 
-        // Add incident marker to map
         if (mapInstanceRef.current && incident.location) {
           const marker = L.marker([incident.location.latitude, incident.location.longitude], {
             icon: window.incidentIcon,
@@ -616,7 +595,7 @@ useEffect(() => {
     if (!timestamp) return false;
     const now = new Date();
     const lastUpdate = timestamp.toDate();
-    return (now - lastUpdate) < 300000; // 5 minutes
+    return (now - lastUpdate) < 300000;
   };
 
   const startLocationTracking = () => {
@@ -628,7 +607,6 @@ useEffect(() => {
           const { latitude, longitude } = position.coords;
           updateUserLocation(latitude, longitude);
           
-          // Update route progress if route selected
           if (currentRoute) {
             updateRouteProgress(latitude, longitude);
           }
@@ -663,7 +641,6 @@ useEffect(() => {
         timestamp: serverTimestamp()
       });
 
-      // Center map on first location
       if (!hasSetInitialLocationRef.current && mapInstanceRef.current) {
         mapInstanceRef.current.setView([lat, lng], 15);
         hasSetInitialLocationRef.current = true;
@@ -685,7 +662,6 @@ useEffect(() => {
       leafletCoords = coordinates.map(coord => [coord.lat, coord.lng]);
     }
 
-    // Find closest point on route
     let closestIndex = 0;
     let minDistance = Infinity;
 
@@ -697,10 +673,8 @@ useEffect(() => {
       }
     });
 
-    // Update progress
     const progress = closestIndex / (leafletCoords.length - 1);
     
-    // Determine if returning
     if (progress > 0.8 && !isReturning) {
       setIsReturning(true);
     }
@@ -714,7 +688,6 @@ useEffect(() => {
 
     if (mapInstanceRef.current) {
       if (currentIndex > 0) {
-        // Completed route (dark blue)
         const completedRoute = L.polyline(leafletCoords.slice(0, currentIndex + 1), {
           color: '#1565C0',
           weight: 14,
@@ -724,7 +697,6 @@ useEffect(() => {
       }
 
       if (currentIndex < leafletCoords.length - 1) {
-        // Pending route (light green)
         const pendingRoute = L.polyline(leafletCoords.slice(currentIndex), {
           color: '#81C784',
           weight: 12,
@@ -737,7 +709,7 @@ useEffect(() => {
   };
 
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
-    const R = 6371e3; // Earth's radius in meters
+    const R = 6371e3;
     const φ1 = lat1 * Math.PI/180;
     const φ2 = lat2 * Math.PI/180;
     const Δφ = (lat2-lat1) * Math.PI/180;
@@ -1135,7 +1107,17 @@ useEffect(() => {
               </div>
             </div>
           </div>
-          
+
+          {/* Map */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
+            <div 
+              ref={mapRef} 
+              className="w-full"
+              style={{ height: '500px' }}
+            ></div>
+          </div>
+        </div>
+        
         {/* Notification */}
         {notification && (
           <div className={`fixed top-20 right-4 p-4 rounded-xl shadow-lg z-50 max-w-sm ${
@@ -1262,18 +1244,3 @@ useEffect(() => {
 };
 
 export default BikeGPSApp;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
