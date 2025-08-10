@@ -21,7 +21,6 @@ import {
   where, 
   serverTimestamp 
 } from 'firebase/firestore';
-
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
 
 const BikeGPSApp = () => {
@@ -59,7 +58,6 @@ const BikeGPSApp = () => {
       domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
     });
   }, []);
-
   useEffect(() => {
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
@@ -76,7 +74,6 @@ const BikeGPSApp = () => {
       );
     }
   }, []);
-
   useEffect(() => {
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -86,20 +83,17 @@ const BikeGPSApp = () => {
       }
     });
   }, []);
-
   useEffect(() => {
     console.log('🗺️ Verificant contenidor...');
     const mapContainer = document.getElementById('map');
     console.log('- Contenidor trobat:', mapContainer);
     console.log('- Dimensions:', mapContainer?.offsetWidth, 'x', mapContainer?.offsetHeight);
   }, []);
-
   useEffect(() => {
     console.log('📚 Leaflet disponible:', typeof L);
     console.log('- L.map function:', typeof L.map);
     console.log('- L.tileLayer function:', typeof L.tileLayer);
   }, []);
-
   useEffect(() => {
     const timer = setTimeout(() => {
       console.log('🗺️ Intentant crear mapa amb delay...');
@@ -107,7 +101,6 @@ const BikeGPSApp = () => {
 
     return () => clearTimeout(timer);
   }, []);
-  
   // Initialize auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -122,7 +115,8 @@ const BikeGPSApp = () => {
       }
     });
 
-    return () => unsubscribe();
+    return () => 
+unsubscribe();
   }, []);
 
   // Initialize map
@@ -174,7 +168,6 @@ const BikeGPSApp = () => {
       }
     };
   });
-
   // Load data when user changes
   useEffect(() => {
     if (currentUser) {
@@ -193,18 +186,15 @@ const BikeGPSApp = () => {
       }
     };
   }, [currentUser, isAdmin]);
-
   const checkAdminStatus = async (user) => {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
       
       const isSuperAdminUser = user.uid === SUPER_ADMIN_UID;
-      
       if (isSuperAdminUser) {
         setIsAdmin(true);
         setIsSuperAdmin(true);
-        
         if (!userData) {
           await setDoc(doc(db, 'users', user.uid), {
             name: user.displayName || user.email,
@@ -241,12 +231,10 @@ const BikeGPSApp = () => {
       setLoading(false);
     }
   };
-
   // SUBSTITUEIX la funció createCustomIcons (al voltant de la línia 224):
 
 const createCustomIcons = () => {
   console.log('🎨 Creant icones personalitzades...');
-  
   // User icon
   window.userIcon = L.divIcon({
     className: 'custom-user-marker',
@@ -254,7 +242,6 @@ const createCustomIcons = () => {
     iconSize: [24, 24],
     iconAnchor: [12, 12]
   });
-
   // Current user icon
   window.currentUserIcon = L.divIcon({
     className: 'custom-current-user-marker',
@@ -262,7 +249,6 @@ const createCustomIcons = () => {
     iconSize: [28, 28],
     iconAnchor: [14, 14]
   });
-
   // Incident icon
   window.incidentIcon = L.divIcon({
     className: 'custom-incident-marker',
@@ -270,7 +256,6 @@ const createCustomIcons = () => {
     iconSize: [30, 30],
     iconAnchor: [15, 15]
   });
-  
   console.log('✅ Icones creades correctament');
 };
 
@@ -284,7 +269,6 @@ const createCustomIcons = () => {
     const formData = new FormData(e.target);
     const email = formData.get('email');
     const password = formData.get('password');
-
     try {
       await signInWithEmailAndPassword(auth, email, password);
       showNotification('Login correcte!', 'success');
@@ -293,7 +277,6 @@ const createCustomIcons = () => {
       showNotification('Error: ' + error.message, 'error');
     }
   };
-
   const handleRegister = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -303,14 +286,12 @@ const createCustomIcons = () => {
 
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         name: name,
         email: email,
         isAdmin: false,
         createdAt: serverTimestamp()
       });
-
       showNotification('Usuari registrat correctament!', 'success');
     } catch (error) {
       console.error('Error register:', error);
@@ -324,7 +305,6 @@ const createCustomIcons = () => {
     const name = formData.get('routeName');
     const description = formData.get('routeDescription');
     const gpxFile = formData.get('gpxFile');
-
     if (!gpxFile) {
       showNotification('Selecciona un arxiu GPX', 'error');
       return;
@@ -336,7 +316,6 @@ const createCustomIcons = () => {
 
       const gpxText = await readFileAsText(gpxFile);
       setUploadProgress(50);
-
       const coordinates = parseGPX(gpxText);
       setUploadProgress(80);
 
@@ -344,7 +323,6 @@ const createCustomIcons = () => {
         lat: coord[0],
         lng: coord[1]
       }));
-
       const routeData = {
         name: name,
         description: description,
@@ -354,19 +332,16 @@ const createCustomIcons = () => {
         gpxFileName: gpxFile.name,
         pointsCount: coordinateObjects.length
       };
-
       await addDoc(collection(db, 'routes'), routeData);
 
       setUploadProgress(100);
       showNotification('✅ Ruta creada correctament des de GPX!', 'success');
 
       e.target.reset();
-      
       setTimeout(() => {
         setShowUploadProgress(false);
         setUploadProgress(0);
       }, 1000);
-
       loadRoutes();
 
     } catch (error) {
@@ -376,7 +351,6 @@ const createCustomIcons = () => {
       showNotification('Error creant ruta: ' + error.message, 'error');
     }
   };
-
   const readFileAsText = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -460,7 +434,6 @@ const createCustomIcons = () => {
     setCurrentRoute({ id: routeId, ...routeData });
     setRouteProgress(0);
     setIsReturning(false);
-    
     if (mapInstanceRef.current && routeData.coordinates) {
       clearRoutePolylines();
 
@@ -477,14 +450,12 @@ const createCustomIcons = () => {
         opacity: 0.8,
         dashArray: '20, 15'
       }).addTo(mapInstanceRef.current);
-      
       routePolylinesRef.current.push(pendingRoute);
       mapInstanceRef.current.fitBounds(pendingRoute.getBounds());
     }
 
     showNotification('Ruta seleccionada: ' + routeData.name, 'success');
   };
-
   const clearRoutePolylines = () => {
     routePolylinesRef.current.forEach(polyline => {
       if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(polyline)) {
@@ -511,7 +482,6 @@ const createCustomIcons = () => {
       }
     }
   };
-
   const listenToUsers = () => {
     const unsubscribe = onSnapshot(collection(db, 'userLocations'), (snapshot) => {
       const usersData = [];
@@ -523,6 +493,7 @@ const createCustomIcons = () => {
 
         if (userMarkersRef.current[userId]) {
           mapInstanceRef.current?.removeLayer(userMarkersRef.current[userId]);
+      
         }
 
         if (mapInstanceRef.current && location.latitude && location.longitude) {
@@ -559,7 +530,6 @@ const createCustomIcons = () => {
 
   const listenToIncidents = () => {
     const q = query(collection(db, 'incidents'), where('resolved', '==', false));
-    
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const incidentsData = [];
       
@@ -599,7 +569,6 @@ const createCustomIcons = () => {
 
     return unsubscribe;
   };
-
   const isUserOnline = (timestamp) => {
     if (!timestamp) return false;
     const now = new Date();
@@ -607,41 +576,91 @@ const createCustomIcons = () => {
     return (now - lastUpdate) < 300000;
   };
 
+  // SUBSTITUEIX la funció startLocationTracking (al voltant de la línia 603):
   const startLocationTracking = () => {
-    if (navigator.geolocation) {
-      console.log('📍 Iniciant seguiment de localització...');
-      
-      watchIdRef.current = navigator.geolocation.watchPosition(
-        (position) => {
-          const { latitude, longitude } = position.coords;
-          updateUserLocation(latitude, longitude);
-          
-          if (currentRoute) {
-            updateRouteProgress(latitude, longitude);
-          }
-        },
-        (error) => {
-          console.error('❌ Error obtenint ubicació:', error);
-          showNotification('Error obtenint ubicació GPS', 'error');
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000
-        }
-      );
-    } else {
+    if (!navigator.geolocation) {
+      console.log('❌ Geolocalització no disponible');
       showNotification('Geolocalització no disponible en aquest dispositiu', 'error');
+      return;
     }
+  
+    console.log('📍 Iniciant seguiment de localització...');
+    
+    // Primer intenta obtenir una posició
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('✅ Posició inicial obtinguda:', {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+        
+        // Actualitza la posició inicial
+        updateUserLocation(position.coords.latitude, position.coords.longitude);
+      },
+      (error) => {
+        console.error('❌ Error posició inicial:', error.message);
+        let errorMessage = 'Error obtenint ubicació GPS: ';
+        
+        switch(error.code) {
+          case error.PERMISSION_DENIED:
+            errorMessage += 'Permisos denegats. Activa la geolocalització al navegador.';
+            break;
+          case error.POSITION_UNAVAILABLE:
+            errorMessage += 'Ubicació no disponible.';
+            break;
+          case error.TIMEOUT:
+            errorMessage += 'Temps d\'espera esgotat.';
+            break;
+          default:
+            errorMessage += error.message;
+            break;
+        }
+        
+        showNotification(errorMessage, 'error');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      }
+    );
+    
+    // Després inicia el seguiment continu
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        console.log('📍 Nova posició:', {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          timestamp: new Date().toLocaleTimeString()
+        });
+        
+        const { latitude, longitude } = position.coords;
+        updateUserLocation(latitude, longitude);
+        
+        // Update route progress if route selected
+        if (currentRoute) {
+          updateRouteProgress(latitude, longitude);
+        }
+      },
+      (error) => {
+        console.error('❌ Error seguiment ubicació:', error.message);
+        // No mostrem notificació per cada error del watchPosition
+        // només loggem per debug
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 30000
+      }
+    );
   };
-
   const updateUserLocation = async (lat, lng) => {
     if (!currentUser) return;
-
     try {
       const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
       const userData = userDoc.data();
-
       await setDoc(doc(db, 'userLocations', currentUser.uid), {
         userId: currentUser.uid,
         userName: userData ? userData.name : 'Usuari',
@@ -649,7 +668,6 @@ const createCustomIcons = () => {
         longitude: lng,
         timestamp: serverTimestamp()
       });
-
       if (!hasSetInitialLocationRef.current && mapInstanceRef.current) {
         mapInstanceRef.current.setView([lat, lng], 15);
         hasSetInitialLocationRef.current = true;
@@ -661,7 +679,6 @@ const createCustomIcons = () => {
 
   const updateRouteProgress = (currentLat, currentLng) => {
     if (!currentRoute || !currentRoute.coordinates) return;
-
     const coordinates = currentRoute.coordinates;
     let leafletCoords;
     
@@ -673,7 +690,6 @@ const createCustomIcons = () => {
 
     let closestIndex = 0;
     let minDistance = Infinity;
-
     leafletCoords.forEach((coord, index) => {
       const distance = calculateDistance(currentLat, currentLng, coord[0], coord[1]);
       if (distance < minDistance) {
@@ -681,7 +697,6 @@ const createCustomIcons = () => {
         closestIndex = index;
       }
     });
-
     const progress = closestIndex / (leafletCoords.length - 1);
     
     if (progress > 0.8 && !isReturning) {
@@ -694,7 +709,6 @@ const createCustomIcons = () => {
 
   const updateRouteVisualization = (leafletCoords, currentIndex) => {
     clearRoutePolylines();
-
     if (mapInstanceRef.current) {
       if (currentIndex > 0) {
         const completedRoute = L.polyline(leafletCoords.slice(0, currentIndex + 1), {
@@ -731,10 +745,8 @@ const createCustomIcons = () => {
 
     return R * c;
   };
-
   const reportIncident = async () => {
     const message = prompt('Descriu la incidència (opcional):');
-    
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(async (position) => {
         try {
@@ -765,7 +777,6 @@ const createCustomIcons = () => {
       showNotification('No es pot obtenir la ubicació', 'error');
     }
   };
-
   const resolveIncident = async (incidentId) => {
     try {
       await updateDoc(doc(db, 'incidents', incidentId), {
@@ -773,7 +784,6 @@ const createCustomIcons = () => {
         resolvedAt: serverTimestamp(),
         resolvedBy: currentUser.uid
       });
-      
       showNotification('✅ Incidència resolta correctament', 'success');
     } catch (error) {
       console.error('Error resolving incident:', error);
@@ -825,7 +835,8 @@ const createCustomIcons = () => {
             <span className="text-gray-800">GPS</span>
           </h2>
 
-          <div className="flex mb-6 rounded-2xl overflow-hidden bg-gray-100">
+          <div 
+className="flex mb-6 rounded-2xl overflow-hidden bg-gray-100">
             <button
               className={`flex-1 p-3 font-semibold transition-all ${
                 authTab === 'login' 
@@ -1168,7 +1179,8 @@ const createCustomIcons = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
         {/* Sidebar - Routes */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-24">
+          <div className="bg-white 
+rounded-2xl shadow-lg p-6 sticky top-24">
             <h3 className="text-lg font-bold mb-4 border-b-2 border-yellow-500 pb-2">
               Rutes Disponibles
             </h3>
@@ -1253,4 +1265,3 @@ const createCustomIcons = () => {
 };
 
 export default BikeGPSApp;
-
