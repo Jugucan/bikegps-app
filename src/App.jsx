@@ -21,7 +21,6 @@ import {
   where, 
   serverTimestamp 
 } from 'firebase/firestore';
-
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
 
 const BikeGPSApp = () => {
@@ -120,13 +119,12 @@ const BikeGPSApp = () => {
 unsubscribe();
   }, []);
 
-  // Initialize map - VERSION CORREGIDA
+  // Initialize map
   useEffect(() => {
     console.log('🗺️ Intentant crear mapa...');
     console.log('- mapRef.current:', mapRef.current);
     console.log('- mapInstanceRef.current:', mapInstanceRef.current);
     
-    // ESPERA QUE EL CONTENIDOR ESTIGUI DISPONIBLE
     if (!mapRef.current) {
       console.log('⏳ Contenidor no disponible encara, esperant...');
       return;
@@ -163,13 +161,13 @@ unsubscribe();
     }
 
     return () => {
-      console.log('🧹 Netejant mapa...');
       if (mapInstanceRef.current) {
+        console.log('🧹 Netejant mapa...');
         mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
-  }, [currentUser]); // ← IMPORTANT: Afegir dependència currentUser
+  });
   // Load data when user changes
   useEffect(() => {
     if (currentUser) {
