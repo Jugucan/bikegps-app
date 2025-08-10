@@ -109,20 +109,26 @@ useEffect(() => {
 unsubscribe();
   }, []);
 
-  // SUBSTITUEIX el useEffect del mapa (línia 122) per aquest:
+// SUBSTITUEIX el useEffect del mapa per aquest:
 useEffect(() => {
   console.log('🗺️ Intentant crear mapa...');
   console.log('- mapRef.current:', mapRef.current);
   console.log('- mapInstanceRef.current:', mapInstanceRef.current);
   
-  if (!mapRef.current) {
-    console.log('⏳ Contenidor no disponible encara, esperant...');
-    return;
-  }
-  
+  // Si ja tenim el mapa creat, no fer res
   if (mapInstanceRef.current) {
     console.log('🗺️ Mapa ja creat, sortint...');
     return;
+  }
+  
+  // Si no tenim el contenidor, programar un retry
+  if (!mapRef.current) {
+    console.log('⏳ Contenidor no disponible encara, reintentant...');
+    const timer = setTimeout(() => {
+      // Forçar un re-render per tornar a intentar
+      setLoading(prev => prev); // Trigger re-render sense canviar l'estat
+    }, 100);
+    return () => clearTimeout(timer);
   }
   
   try {
@@ -140,16 +146,18 @@ useEffect(() => {
     
     mapInstanceRef.current = map;
     
-    if (typeof createCustomIcons === 'function') {
-      createCustomIcons();
-    }
+    // Crear les icones personalitzades
+    createCustomIcons();
+    
   } catch (error) {
     console.error('❌ Error initializing map:', error);
-    if (typeof showNotification === 'function') {
-      showNotification('Error carregant mapa', 'error');
-    }
+    showNotification('Error carregant mapa', 'error');
   }
 
+}, [currentUser]); // Executar quan canvia currentUser (quan es logueja)
+
+// Neteja del mapa quan es desmunta el component
+useEffect(() => {
   return () => {
     if (mapInstanceRef.current) {
       console.log('🧹 Netejant mapa...');
@@ -157,7 +165,7 @@ useEffect(() => {
       mapInstanceRef.current = null;
     }
   };
-}, []); // ✅ ARRAY DE DEPENDÈNCIES BUIT - només s'executa un cop!
+}, []);
   
 // SUBSTITUEIX el useEffect que carrega dades (línia 175) per aquest:
 useEffect(() => {
@@ -1261,6 +1269,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
