@@ -514,11 +514,24 @@ const createCustomIcons = () => {
 
   // SUBSTITUEIX la funció listenToUsers per aquesta versió amb més debug:
 
+// BUSCA la funció listenToUsers i SUBSTITUEIX-LA per aquesta versió amb debug:
+
 const listenToUsers = () => {
-  console.log('👂 Iniciant listener per usuaris...');
+  console.log('👂 INICIANT LISTENER PER USUARIS...');
+  console.log('📍 mapInstanceRef.current:', mapInstanceRef.current);
+  console.log('🎨 Icones disponibles:', {
+    userIcon: !!window.userIcon,
+    currentUserIcon: !!window.currentUserIcon
+  });
   
   const unsubscribe = onSnapshot(collection(db, 'userLocations'), (snapshot) => {
-    console.log(`👥 Rebudes ${snapshot.size} ubicacions d'usuaris`);
+    console.log(`🔥 FIREBASE: Rebudes ${snapshot.size} ubicacions d'usuaris`);
+    
+    if (snapshot.empty) {
+      console.log('⚠️ Cap ubicació trobada a Firebase');
+      return;
+    }
+    
     const usersData = [];
     
     snapshot.forEach((doc) => {
@@ -526,56 +539,66 @@ const listenToUsers = () => {
       const userId = doc.id;
       const isCurrentUser = userId === currentUser?.uid;
       
-      console.log(`📍 Processant usuari: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'})`, {
+      console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'})`, {
         lat: location.latitude,
         lng: location.longitude,
-        mapExists: !!mapInstanceRef.current,
-        iconsExist: !!window.userIcon && !!window.currentUserIcon
+        timestamp: location.timestamp?.toDate?.()?.toLocaleTimeString() || 'No timestamp'
       });
 
       // Eliminar marker anterior si existeix
       if (userMarkersRef.current[userId]) {
         console.log(`🗑️ Eliminant marker anterior per ${location.userName}`);
-        mapInstanceRef.current?.removeLayer(userMarkersRef.current[userId]);
+        if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(userMarkersRef.current[userId])) {
+          mapInstanceRef.current.removeLayer(userMarkersRef.current[userId]);
+        }
         delete userMarkersRef.current[userId];
       }
 
-      // Crear marker al mapa si tenim mapa i coordenades
+      // Crear marker al mapa
       if (mapInstanceRef.current && location.latitude && location.longitude) {
         
-        // Comprovar si les icones existeixen
+        // Crear icones si no existeixen
         if (!window.userIcon || !window.currentUserIcon) {
-          console.log('⚠️ Icones no disponibles, creant-les...');
+          console.log('🎨 Creant icones perquè no existeixen...');
           createCustomIcons();
         }
         
         const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
+        console.log(`🎯 Creant marker per ${location.userName} amb icona:`, icon ? 'OK' : 'ERROR');
         
         try {
-          userMarkersRef.current[userId] = L.marker([location.latitude, location.longitude], {
+          const marker = L.marker([location.latitude, location.longitude], {
             icon: icon
           }).addTo(mapInstanceRef.current);
+          
+          userMarkersRef.current[userId] = marker;
 
-          userMarkersRef.current[userId].bindPopup(`
+          marker.bindPopup(`
             <div style="text-align: center; padding: 0.5rem;">
-              <strong style="color: ${isCurrentUser ? '#2ed573' : '#ffd02e'};">${isCurrentUser ? '📍 Tu' : '👤 ' + location.userName}</strong><br>
-              <small style="color: #666;">Última actualització:<br>${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}</small>
+              <strong style="color: ${isCurrentUser ? '#2ed573' : '#ffd02e'};">
+                ${isCurrentUser ? '📍 Tu' : '👤 ' + location.userName}
+              </strong><br>
+              <small style="color: #666;">
+                Última actualització:<br>
+                ${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
+              </small>
             </div>
           `);
           
-          console.log(`✅ Marker creat correctament per ${location.userName}`);
+          console.log(`✅ MARKER CREAT CORRECTAMENT per ${location.userName}`);
           
         } catch (error) {
-          console.error(`❌ Error creant marker per ${location.userName}:`, error);
+          console.error(`❌ ERROR creant marker per ${location.userName}:`, error);
         }
       } else {
-        console.log(`❌ No es pot crear marker per ${location.userName}:`, {
+        console.log(`❌ NO ES POT CREAR MARKER per ${location.userName}:`, {
           mapExists: !!mapInstanceRef.current,
-          hasCoords: !!(location.latitude && location.longitude)
+          hasLat: !!location.latitude,
+          hasLng: !!location.longitude
         });
       }
 
-      // Només els admins necessiten la llista d'usuaris per la interfície
+      // Guardar per la llista d'admin
       if (isAdmin) {
         usersData.push({
           ...location,
@@ -586,14 +609,16 @@ const listenToUsers = () => {
       }
     });
 
-    // Només actualitzar la llista si som admin
+    // Actualitzar llista si som admin
     if (isAdmin) {
       setUsers(usersData);
+      console.log(`👑 ADMIN: Llista usuaris actualitzada amb ${usersData.length} usuaris`);
     }
     
-    console.log(`👥 Processats ${snapshot.size} usuaris. Markers actius:`, Object.keys(userMarkersRef.current).length);
+    console.log(`🎯 RESUM: ${snapshot.size} usuaris, ${Object.keys(userMarkersRef.current).length} markers al mapa`);
+    
   }, (error) => {
-    console.error('❌ Error escoltant usuaris:', error);
+    console.error('❌ ERROR escoltant usuaris:', error);
     showNotification('Error carregant ubicacions d\'usuaris', 'error');
   });
 
@@ -1339,6 +1364,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
