@@ -119,55 +119,56 @@ const BikeGPSApp = () => {
 unsubscribe();
   }, []);
 
-  // Initialize map
-  useEffect(() => {
-    console.log('🗺️ Intentant crear mapa...');
-    console.log('- mapRef.current:', mapRef.current);
-    console.log('- mapInstanceRef.current:', mapInstanceRef.current);
+  // SUBSTITUEIX el useEffect del mapa (línia 122) per aquest:
+useEffect(() => {
+  console.log('🗺️ Intentant crear mapa...');
+  console.log('- mapRef.current:', mapRef.current);
+  console.log('- mapInstanceRef.current:', mapInstanceRef.current);
+  
+  if (!mapRef.current) {
+    console.log('⏳ Contenidor no disponible encara, esperant...');
+    return;
+  }
+  
+  if (mapInstanceRef.current) {
+    console.log('🗺️ Mapa ja creat, sortint...');
+    return;
+  }
+  
+  try {
+    console.log('🗺️ Creant mapa...');
+    const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
     
-    if (!mapRef.current) {
-      console.log('⏳ Contenidor no disponible encara, esperant...');
-      return;
-    }
+    const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+      crossOrigin: true
+    });
     
-    if (mapInstanceRef.current) {
-      console.log('🗺️ Mapa ja creat, sortint...');
-      return;
-    }
+    tileLayer.addTo(map);
+    console.log('✅ Mapa carregat correctament');
     
-    try {
-      console.log('🗺️ Creant mapa...');
-      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
-      
-      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19,
-        crossOrigin: true
-      });
-      
-      tileLayer.addTo(map);
-      console.log('✅ Mapa carregat correctament');
-      
-      mapInstanceRef.current = map;
-      
-      if (typeof createCustomIcons === 'function') {
-        createCustomIcons();
-      }
-    } catch (error) {
-      console.error('❌ Error initializing map:', error);
-      if (typeof showNotification === 'function') {
-        showNotification('Error carregant mapa', 'error');
-      }
+    mapInstanceRef.current = map;
+    
+    if (typeof createCustomIcons === 'function') {
+      createCustomIcons();
     }
+  } catch (error) {
+    console.error('❌ Error initializing map:', error);
+    if (typeof showNotification === 'function') {
+      showNotification('Error carregant mapa', 'error');
+    }
+  }
 
-    return () => {
-      if (mapInstanceRef.current) {
-        console.log('🧹 Netejant mapa...');
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
-    };
-  });
+  return () => {
+    if (mapInstanceRef.current) {
+      console.log('🧹 Netejant mapa...');
+      mapInstanceRef.current.remove();
+      mapInstanceRef.current = null;
+    }
+  };
+}, []); // ✅ ARRAY DE DEPENDÈNCIES BUIT - només s'executa un cop!
+  
   // Load data when user changes
   useEffect(() => {
     if (currentUser) {
@@ -1265,3 +1266,4 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
