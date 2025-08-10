@@ -500,51 +500,60 @@ const createCustomIcons = () => {
       }
     }
   };
-  const listenToUsers = () => {
-    const unsubscribe = onSnapshot(collection(db, 'userLocations'), (snapshot) => {
-      const usersData = [];
-      
-      snapshot.forEach((doc) => {
-        const location = doc.data();
-        const userId = doc.id;
-        const isCurrentUser = userId === currentUser?.uid;
+// BUSCA la funció listenToUsers (aprox. línia 450) i SUBSTITUEIX-LA per aquesta:
 
-        if (userMarkersRef.current[userId]) {
-          mapInstanceRef.current?.removeLayer(userMarkersRef.current[userId]);
-      
-        }
+const listenToUsers = () => {
+  const unsubscribe = onSnapshot(collection(db, 'userLocations'), (snapshot) => {
+    const usersData = [];
+    
+    snapshot.forEach((doc) => {
+      const location = doc.data();
+      const userId = doc.id;
+      const isCurrentUser = userId === currentUser?.uid;
 
-        if (mapInstanceRef.current && location.latitude && location.longitude) {
-          const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
-          userMarkersRef.current[userId] = L.marker([location.latitude, location.longitude], {
-            icon: icon
-          }).addTo(mapInstanceRef.current);
+      // Eliminar marker anterior si existeix
+      if (userMarkersRef.current[userId]) {
+        mapInstanceRef.current?.removeLayer(userMarkersRef.current[userId]);
+      }
 
-          userMarkersRef.current[userId].bindPopup(`
-            <div style="text-align: center; padding: 0.5rem;">
-              <strong style="color: ${isCurrentUser ? '#2ed573' : '#ffd02e'};">${isCurrentUser ? '📍 Tu' : '👤 ' + location.userName}</strong><br>
-              <small style="color: #666;">Última actualització:<br>${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}</small>
-            </div>
-          `);
-        }
+      // Crear marker al mapa si tenim mapa i coordenades
+      if (mapInstanceRef.current && location.latitude && location.longitude) {
+        const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
+        userMarkersRef.current[userId] = L.marker([location.latitude, location.longitude], {
+          icon: icon
+        }).addTo(mapInstanceRef.current);
 
-        if (isAdmin) {
-          usersData.push({
-            ...location,
-            id: userId,
-            isCurrentUser,
-            online: isUserOnline(location.timestamp)
-          });
-        }
-      });
+        userMarkersRef.current[userId].bindPopup(`
+          <div style="text-align: center; padding: 0.5rem;">
+            <strong style="color: ${isCurrentUser ? '#2ed573' : '#ffd02e'};">${isCurrentUser ? '📍 Tu' : '👤 ' + location.userName}</strong><br>
+            <small style="color: #666;">Última actualització:<br>${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}</small>
+          </div>
+        `);
+        
+        console.log(`📍 Marker creat per ${isCurrentUser ? 'tu' : location.userName}`);
+      }
 
+      // Només els admins necessiten la llista d'usuaris per la interfície
       if (isAdmin) {
-        setUsers(usersData);
+        usersData.push({
+          ...location,
+          id: userId,
+          isCurrentUser,
+          online: isUserOnline(location.timestamp)
+        });
       }
     });
 
-    return unsubscribe;
-  };
+    // Només actualitzar la llista si som admin
+    if (isAdmin) {
+      setUsers(usersData);
+    }
+    
+    console.log(`👥 Escoltant ${snapshot.size} usuaris (Admin: ${isAdmin})`);
+  });
+
+  return unsubscribe;
+};
 
   const listenToIncidents = () => {
     const q = query(collection(db, 'incidents'), where('resolved', '==', false));
@@ -1285,6 +1294,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
