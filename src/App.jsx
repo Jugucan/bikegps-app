@@ -176,12 +176,17 @@ useEffect(() => {
   };
 }, []);
   
-// SUBSTITUEIX el useEffect que carrega dades (línia 175) per aquest:
+// BUSCA aquest useEffect (aprox. línia 182) i SUBSTITUEIX-LO per aquest:
+
 useEffect(() => {
   if (currentUser) {
     loadRoutes();
+    
+    // TOTS els usuaris poden veure ubicacions d'altres usuaris
+    listenToUsers();
+    
+    // Només els admins poden veure incidències
     if (isAdmin) {
-      listenToUsers();
       listenToIncidents();
     }
     
@@ -1280,6 +1285,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
