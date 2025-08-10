@@ -48,59 +48,49 @@ const BikeGPSApp = () => {
   const routePolylinesRef = useRef([]);
   const hasSetInitialLocationRef = useRef(false);
 
-  // Debug effects
-  useEffect(() => {
-    console.log('🔧 App.jsx Debug:');
-    console.log('- auth object:', auth);
-    console.log('- db object:', db);
-    console.log('- Variables env:', {
-      api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
-      domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
-    });
-  }, []);
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          console.log('📍 Localització obtinguda:', {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.error('❌ Error geolocalització:', error.message);
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-      );
-    }
-  }, []);
-  useEffect(() => {
-    onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log('✅ Usuari connectat:', user.email);
-      } else {
-        console.log('❌ Cap usuari connectat');
-      }
-    });
-  }, []);
-  useEffect(() => {
-    console.log('🗺️ Verificant contenidor...');
-    const mapContainer = document.getElementById('map');
-    console.log('- Contenidor trobat:', mapContainer);
-    console.log('- Dimensions:', mapContainer?.offsetWidth, 'x', mapContainer?.offsetHeight);
-  }, []);
-  useEffect(() => {
-    console.log('📚 Leaflet disponible:', typeof L);
-    console.log('- L.map function:', typeof L.map);
-    console.log('- L.tileLayer function:', typeof L.tileLayer);
-  }, []);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      console.log('🗺️ Intentant crear mapa amb delay...');
-    }, 100);
+// SUBSTITUEIX els useEffect de debug (línies 53-104) per aquests:
 
-    return () => clearTimeout(timer);
-  }, []);
+// Debug inicial - només un cop
+useEffect(() => {
+  console.log('🔧 App.jsx Debug:');
+  console.log('- auth object:', auth);
+  console.log('- db object:', db);
+  console.log('- Variables env:', {
+    api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
+    domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
+  });
+  
+  // Test geolocalització
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        console.log('📍 Localització obtinguda:', {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+      },
+      (error) => {
+        console.error('❌ Error geolocalització:', error.message);
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
+  }
+  
+  // Test Leaflet
+  console.log('📚 Leaflet disponible:', typeof L);
+  console.log('- L.map function:', typeof L.map);
+  console.log('- L.tileLayer function:', typeof L.tileLayer);
+}, []); // ✅ Només un cop
+
+// Debug auth - només quan canvia currentUser
+useEffect(() => {
+  if (currentUser) {
+    console.log('✅ Usuari connectat:', currentUser.email);
+  } else {
+    console.log('❌ Cap usuari connectat');
+  }
+}, [currentUser]); // ✅ Només quan canvia currentUser
+  
   // Initialize auth listener
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -1266,4 +1256,5 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
