@@ -111,7 +111,8 @@ unsubscribe();
 
 // SUBSTITUEIX completament el useEffect del mapa per aquest codi:
 
-// Crear mapa quan l'usuari es connecti i el component estigui llest
+// MODIFICA el useEffect del mapa per iniciar els listeners DESPRÉS de crear el mapa:
+
 useEffect(() => {
   if (!currentUser) {
     console.log('❌ No hi ha usuari connectat, no crear mapa');
@@ -149,23 +150,30 @@ useEffect(() => {
       });
       
       tileLayer.addTo(map);
-// Al useEffect del mapa, després de crear el mapa, AFEGEIX això:
-console.log('✅ Mapa carregat correctament');
-
-mapInstanceRef.current = map;
-
-// Crear les icones personalitzades SEMPRE
-console.log('🎨 Creant icones personalitzades...');
-createCustomIcons();
-
-// Verificar que s'han creat correctament
-setTimeout(() => {
-  console.log('🔍 Verificant icones:', {
-    userIcon: !!window.userIcon,
-    currentUserIcon: !!window.currentUserIcon,
-    incidentIcon: !!window.incidentIcon
-  });
-}, 100);
+      console.log('✅ Mapa carregat correctament');
+      
+      mapInstanceRef.current = map;
+      
+      // Crear les icones personalitzades
+      console.log('🎨 Creant icones personalitzades...');
+      createCustomIcons();
+      
+      // 🔥 IMPORTANT: Ara iniciem els listeners DESPRÉS que el mapa estigui creat
+      console.log('🎯 Mapa creat, iniciant listeners...');
+      
+      // Iniciar listener d'usuaris
+      const unsubscribeUsers = listenToUsers();
+      
+      // Iniciar listener d'incidències si som admin
+      if (isAdmin) {
+        const unsubscribeIncidents = listenToIncidents();
+      }
+      
+      // Guardar les funcions de cleanup
+      mapInstanceRef.current._cleanupListeners = () => {
+        if (unsubscribeUsers) unsubscribeUsers();
+        if (unsubscribeIncidents) unsubscribeIncidents();
+      };
       
     } catch (error) {
       console.error('❌ Error initializing map:', error);
@@ -174,13 +182,19 @@ setTimeout(() => {
   }, 500); // Esperem mig segon
   
   return () => clearTimeout(timer);
-}, [currentUser]); // Només quan canvia currentUser
+}, [currentUser, isAdmin]); // Quan canvia usuari o admin status
 
 // Neteja del mapa quan es desmunta el component
 useEffect(() => {
   return () => {
     if (mapInstanceRef.current) {
-      console.log('🧹 Netejant mapa...');
+      console.log('🧹 Netejant mapa i listeners...');
+      
+      // Netejar listeners si existeixen
+      if (mapInstanceRef.current._cleanupListeners) {
+        mapInstanceRef.current._cleanupListeners();
+      }
+      
       mapInstanceRef.current.remove();
       mapInstanceRef.current = null;
     }
@@ -1379,6 +1393,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
