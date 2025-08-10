@@ -125,58 +125,55 @@ const BikeGPSApp = () => {
     return () => unsubscribe();
   }, []);
 
-// SUBSTITUEIX aquest useEffect del mapa (al voltant de la línia 128):
-
-// Initialize map - VERSION CORREGIDA
-useEffect(() => {
-  console.log('🗺️ Intentant crear mapa...');
-  console.log('- mapRef.current:', mapRef.current);
-  console.log('- mapInstanceRef.current:', mapInstanceRef.current);
-  
-  // ESPERA QUE EL CONTENIDOR ESTIGUI DISPONIBLE
-  if (!mapRef.current) {
-    console.log('⏳ Contenidor no disponible encara, esperant...');
-    return;
-  }
-  
-  if (mapInstanceRef.current) {
-    console.log('🗺️ Mapa ja creat, sortint...');
-    return;
-  }
-  
-  try {
-    console.log('🗺️ Creant mapa...');
-    const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+  // Initialize map
+  useEffect(() => {
+    console.log('🗺️ Intentant crear mapa...');
+    console.log('- mapRef.current:', mapRef.current);
+    console.log('- mapInstanceRef.current:', mapInstanceRef.current);
     
-    const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors',
-      maxZoom: 19,
-      crossOrigin: true
-    });
-    
-    tileLayer.addTo(map);
-    console.log('✅ Mapa carregat correctament');
-    
-    mapInstanceRef.current = map;
-    
-    if (typeof createCustomIcons === 'function') {
-      createCustomIcons();
+    if (!mapRef.current) {
+      console.log('⏳ Contenidor no disponible encara, esperant...');
+      return;
     }
-  } catch (error) {
-    console.error('❌ Error initializing map:', error);
-    if (typeof showNotification === 'function') {
-      showNotification('Error carregant mapa', 'error');
-    }
-  }
-
-  return () => {
-    console.log('🧹 Netejant mapa...');
+    
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
+      console.log('🗺️ Mapa ja creat, sortint...');
+      return;
     }
-  };
-}, [currentUser]); // ← IMPORTANT: Afegir dependència currentUser
+    
+    try {
+      console.log('🗺️ Creant mapa...');
+      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+      
+      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+        crossOrigin: true
+      });
+      
+      tileLayer.addTo(map);
+      console.log('✅ Mapa carregat correctament');
+      
+      mapInstanceRef.current = map;
+      
+      if (typeof createCustomIcons === 'function') {
+        createCustomIcons();
+      }
+    } catch (error) {
+      console.error('❌ Error initializing map:', error);
+      if (typeof showNotification === 'function') {
+        showNotification('Error carregant mapa', 'error');
+      }
+    }
+
+    return () => {
+      if (mapInstanceRef.current) {
+        console.log('🧹 Netejant mapa...');
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  });
 
   // Load data when user changes
   useEffect(() => {
@@ -1247,4 +1244,3 @@ useEffect(() => {
 };
 
 export default BikeGPSApp;
-
