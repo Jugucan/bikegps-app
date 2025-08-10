@@ -21,6 +21,7 @@ import {
   where, 
   serverTimestamp 
 } from 'firebase/firestore';
+
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
 
 const BikeGPSApp = () => {
@@ -47,49 +48,48 @@ const BikeGPSApp = () => {
   const userMarkersRef = useRef({});
   const routePolylinesRef = useRef([]);
   const hasSetInitialLocationRef = useRef(false);
+  const listenersRef = useRef({ users: null, incidents: null }); // ✅ Nou ref per listeners
 
-// SUBSTITUEIX els useEffect de debug (línies 53-104) per aquests:
+  // Debug inicial - només un cop
+  useEffect(() => {
+    console.log('🔧 App.jsx Debug:');
+    console.log('- auth object:', auth);
+    console.log('- db object:', db);
+    console.log('- Variables env:', {
+      api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
+      domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
+    });
+    
+    // Test geolocalització
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          console.log('📍 Localització obtinguda:', {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('❌ Error geolocalització:', error.message);
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    }
+    
+    // Test Leaflet
+    console.log('📚 Leaflet disponible:', typeof L);
+    console.log('- L.map function:', typeof L.map);
+    console.log('- L.tileLayer function:', typeof L.tileLayer);
+  }, []);
 
-// Debug inicial - només un cop
-useEffect(() => {
-  console.log('🔧 App.jsx Debug:');
-  console.log('- auth object:', auth);
-  console.log('- db object:', db);
-  console.log('- Variables env:', {
-    api: import.meta.env.VITE_FIREBASE_API_KEY ? 'OK' : 'MISSING',
-    domain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ? 'OK' : 'MISSING'
-  });
-  
-  // Test geolocalització
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        console.log('📍 Localització obtinguda:', {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude
-        });
-      },
-      (error) => {
-        console.error('❌ Error geolocalització:', error.message);
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
-  }
-  
-  // Test Leaflet
-  console.log('📚 Leaflet disponible:', typeof L);
-  console.log('- L.map function:', typeof L.map);
-  console.log('- L.tileLayer function:', typeof L.tileLayer);
-}, []); // ✅ Només un cop
-
-// Debug auth - només quan canvia currentUser
-useEffect(() => {
-  if (currentUser) {
-    console.log('✅ Usuari connectat:', currentUser.email);
-  } else {
-    console.log('❌ Cap usuari connectat');
-  }
-}, [currentUser]); // ✅ Només quan canvia currentUser
+  // Debug auth - només quan canvia currentUser
+  useEffect(() => {
+    if (currentUser) {
+      console.log('✅ Usuari connectat:', currentUser.email);
+    } else {
+      console.log('❌ Cap usuari connectat');
+    }
+  }, [currentUser]);
   
   // Initialize auth listener
   useEffect(() => {
@@ -105,129 +105,138 @@ useEffect(() => {
       }
     });
 
-    return () => 
-unsubscribe();
+    return () => unsubscribe();
   }, []);
 
-// SUBSTITUEIX completament el useEffect del mapa per aquest codi:
-
-// MODIFICA el useEffect del mapa per iniciar els listeners DESPRÉS de crear el mapa:
-
-useEffect(() => {
-  if (!currentUser) {
-    console.log('❌ No hi ha usuari connectat, no crear mapa');
-    return;
-  }
-
-  console.log('🗺️ Usuari connectat, intentant crear mapa...');
-  
-  // Esperar un moment per assegurar que el DOM està llest
-  const timer = setTimeout(() => {
-    console.log('🗺️ Intentant crear mapa amb delay...');
-    console.log('- mapRef.current:', mapRef.current);
-    console.log('- mapInstanceRef.current:', mapInstanceRef.current);
-    
-    // Si ja tenim el mapa creat, no fer res
-    if (mapInstanceRef.current) {
-      console.log('🗺️ Mapa ja creat, sortint...');
-      return;
-    }
-    
-    // Si no tenim el contenidor, mostrar error
-    if (!mapRef.current) {
-      console.log('❌ Contenidor encara no disponible');
-      return;
-    }
-    
-    try {
-      console.log('🗺️ Creant mapa ara...');
-      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+  // ✅ LISTENERS SEPARATS - S'inicien quan tenim usuari, independentment del mapa
+  useEffect(() => {
+    if (!currentUser) {
+      console.log('❌ No hi ha usuari, no iniciar listeners');
       
-      const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19,
-        crossOrigin: true
-      });
-      
-      tileLayer.addTo(map);
-      console.log('✅ Mapa carregat correctament');
-      
-      mapInstanceRef.current = map;
-      
-      // Crear les icones personalitzades
-      console.log('🎨 Creant icones personalitzades...');
-      createCustomIcons();
-      
-      // 🔥 IMPORTANT: Ara iniciem els listeners DESPRÉS que el mapa estigui creat
-      console.log('🎯 Mapa creat, iniciant listeners...');
-      
-      // Iniciar listener d'usuaris
-      const unsubscribeUsers = listenToUsers();
-      
-      // Iniciar listener d'incidències si som admin
-      if (isAdmin) {
-        const unsubscribeIncidents = listenToIncidents();
+      // Netejar listeners existents
+      if (listenersRef.current.users) {
+        listenersRef.current.users();
+        listenersRef.current.users = null;
+      }
+      if (listenersRef.current.incidents) {
+        listenersRef.current.incidents();
+        listenersRef.current.incidents = null;
       }
       
-      // Guardar les funcions de cleanup
-      mapInstanceRef.current._cleanupListeners = () => {
-        if (unsubscribeUsers) unsubscribeUsers();
-        if (unsubscribeIncidents) unsubscribeIncidents();
-      };
-      
-    } catch (error) {
-      console.error('❌ Error initializing map:', error);
-      showNotification('Error carregant mapa', 'error');
+      return;
     }
-  }, 500); // Esperem mig segon
-  
-  return () => clearTimeout(timer);
-}, [currentUser, isAdmin]); // Quan canvia usuari o admin status
 
-// Neteja del mapa quan es desmunta el component
-useEffect(() => {
-  return () => {
-    if (mapInstanceRef.current) {
-      console.log('🧹 Netejant mapa i listeners...');
+    console.log('🎯 Iniciant listeners per usuari connectat...');
+    
+    // Iniciar listener d'usuaris sempre
+    if (!listenersRef.current.users) {
+      console.log('👂 Iniciant listener usuaris...');
+      listenersRef.current.users = listenToUsers();
+    }
+    
+    // Iniciar listener d'incidències si som admin
+    if (isAdmin && !listenersRef.current.incidents) {
+      console.log('🚨 Iniciant listener incidències (admin)...');
+      listenersRef.current.incidents = listenToIncidents();
+    }
+
+    return () => {
+      console.log('🧹 Netejant listeners...');
+      if (listenersRef.current.users) {
+        listenersRef.current.users();
+        listenersRef.current.users = null;
+      }
+      if (listenersRef.current.incidents) {
+        listenersRef.current.incidents();
+        listenersRef.current.incidents = null;
+      }
+    };
+  }, [currentUser, isAdmin]); // ✅ Només depèn d'usuari i admin status
+
+  // ✅ MAPA - Separat dels listeners
+  useEffect(() => {
+    if (!currentUser) {
+      console.log('❌ No hi ha usuari connectat, no crear mapa');
+      return;
+    }
+
+    console.log('🗺️ Usuari connectat, intentant crear mapa...');
+    
+    const timer = setTimeout(() => {
+      console.log('🗺️ Intentant crear mapa amb delay...');
       
-      // Netejar listeners si existeixen
-      if (mapInstanceRef.current._cleanupListeners) {
-        mapInstanceRef.current._cleanupListeners();
+      if (mapInstanceRef.current) {
+        console.log('🗺️ Mapa ja creat, sortint...');
+        return;
       }
       
-      mapInstanceRef.current.remove();
-      mapInstanceRef.current = null;
-    }
-  };
-}, []);
-  
-// BUSCA aquest useEffect (aprox. línia 182) i SUBSTITUEIX-LO per aquest:
-
-// BUSCA el useEffect que carrega dades (el que té loadRoutes, listenToUsers, etc) 
-// i SUBSTITUEIX-LO per aquest MÉS SIMPLE:
-
-useEffect(() => {
-  if (currentUser) {
-    console.log('📚 Carregant rutes per usuari connectat...');
-    loadRoutes();
+      if (!mapRef.current) {
+        console.log('❌ Contenidor encara no disponible');
+        return;
+      }
+      
+      try {
+        console.log('🗺️ Creant mapa ara...');
+        const map = L.map(mapRef.current).setView([41.6722, 2.4540], 13);
+        
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors',
+          maxZoom: 19,
+          crossOrigin: true
+        });
+        
+        tileLayer.addTo(map);
+        console.log('✅ Mapa carregat correctament');
+        
+        mapInstanceRef.current = map;
+        
+        // Crear les icones personalitzades
+        console.log('🎨 Creant icones personalitzades...');
+        createCustomIcons();
+        
+      } catch (error) {
+        console.error('❌ Error initializing map:', error);
+        showNotification('Error carregant mapa', 'error');
+      }
+    }, 500);
     
-    // Només inicia el seguiment si no està ja actiu
-    if (!watchIdRef.current) {
-      console.log('📍 Iniciant seguiment ubicació...');
-      startLocationTracking();
+    return () => clearTimeout(timer);
+  }, [currentUser]);
+
+  // Neteja del mapa quan es desmunta el component
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        console.log('🧹 Netejant mapa...');
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
+  }, []);
+
+  // ✅ CÀRREGA DE DADES - Separat
+  useEffect(() => {
+    if (currentUser) {
+      console.log('📚 Carregant rutes per usuari connectat...');
+      loadRoutes();
+      
+      // Només inicia el seguiment si no està ja actiu
+      if (!watchIdRef.current) {
+        console.log('📍 Iniciant seguiment ubicació...');
+        startLocationTracking();
+      }
     }
-  }
+    
+    return () => {
+      // Neteja el seguiment d'ubicació quan l'usuari canvia o es desmunta
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
+      }
+    };
+  }, [currentUser]);
   
-  return () => {
-    // Neteja el seguiment d'ubicació quan l'usuari canvia o es desmunta
-    if (watchIdRef.current) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-  };
-}, [currentUser]); // Només quan canvia currentUser 
-  
-    const checkAdminStatus = async (user) => {
+  const checkAdminStatus = async (user) => {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       const userData = userDoc.data();
@@ -272,48 +281,45 @@ useEffect(() => {
       setLoading(false);
     }
   };
-  // SUBSTITUEIX la funció createCustomIcons (al voltant de la línia 224):
 
-// MODIFICA la funció createCustomIcons per afegir més debug:
-
-const createCustomIcons = () => {
-  console.log('🎨 CREANT ICONES PERSONALITZADES...');
-  
-  try {
-    // User icon
-    window.userIcon = L.divIcon({
-      className: 'custom-user-marker',
-      html: '<div style="background: linear-gradient(145deg, #ffd02e, #ffcc00); border: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(255,208,46,0.5);"><span style="font-size: 12px; color: #1a1a1a;">👤</span></div>',
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
+  const createCustomIcons = () => {
+    console.log('🎨 CREANT ICONES PERSONALITZADES...');
     
-    // Current user icon
-    window.currentUserIcon = L.divIcon({
-      className: 'custom-current-user-marker',
-      html: '<div style="background: linear-gradient(145deg, #2ed573, #26d0ce); border: 3px solid #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46,213,115,0.6);"><span style="font-size: 14px; color: white;">📍</span></div>',
-      iconSize: [28, 28],
-      iconAnchor: [14, 14]
-    });
-    
-    // Incident icon
-    window.incidentIcon = L.divIcon({
-      className: 'custom-incident-marker',
-      html: '<div style="background: linear-gradient(145deg, #ff4757, #ff3838); border: 3px solid #fff; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.5); animation: pulse 2s infinite;"><span style="color: white; font-size: 16px;">🚨</span></div>',
-      iconSize: [30, 30],
-      iconAnchor: [15, 15]
-    });
-    
-    console.log('✅ ICONES CREADES:', {
-      userIcon: !!window.userIcon,
-      currentUserIcon: !!window.currentUserIcon,
-      incidentIcon: !!window.incidentIcon
-    });
-    
-  } catch (error) {
-    console.error('❌ ERROR creant icones:', error);
-  }
-};
+    try {
+      // User icon
+      window.userIcon = L.divIcon({
+        className: 'custom-user-marker',
+        html: '<div style="background: linear-gradient(145deg, #ffd02e, #ffcc00); border: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(255,208,46,0.5);"><span style="font-size: 12px; color: #1a1a1a;">👤</span></div>',
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+      
+      // Current user icon
+      window.currentUserIcon = L.divIcon({
+        className: 'custom-current-user-marker',
+        html: '<div style="background: linear-gradient(145deg, #2ed573, #26d0ce); border: 3px solid #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46,213,115,0.6);"><span style="font-size: 14px; color: white;">📍</span></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+      
+      // Incident icon
+      window.incidentIcon = L.divIcon({
+        className: 'custom-incident-marker',
+        html: '<div style="background: linear-gradient(145deg, #ff4757, #ff3838); border: 3px solid #fff; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.5); animation: pulse 2s infinite;"><span style="color: white; font-size: 16px;">🚨</span></div>',
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
+      
+      console.log('✅ ICONES CREADES:', {
+        userIcon: !!window.userIcon,
+        currentUserIcon: !!window.currentUserIcon,
+        incidentIcon: !!window.incidentIcon
+      });
+      
+    } catch (error) {
+      console.error('❌ ERROR creant icones:', error);
+    }
+  };
 
   const showNotification = (message, type = 'info') => {
     setNotification({ message, type });
@@ -333,6 +339,7 @@ const createCustomIcons = () => {
       showNotification('Error: ' + error.message, 'error');
     }
   };
+
   const handleRegister = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -407,6 +414,7 @@ const createCustomIcons = () => {
       showNotification('Error creant ruta: ' + error.message, 'error');
     }
   };
+
   const readFileAsText = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -512,6 +520,7 @@ const createCustomIcons = () => {
 
     showNotification('Ruta seleccionada: ' + routeData.name, 'success');
   };
+
   const clearRoutePolylines = () => {
     routePolylinesRef.current.forEach(polyline => {
       if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(polyline)) {
@@ -539,124 +548,122 @@ const createCustomIcons = () => {
     }
   };
 
-  // SUBSTITUEIX la funció listenToUsers per aquesta versió amb més debug:
-
-// BUSCA la funció listenToUsers i SUBSTITUEIX-LA per aquesta versió amb debug:
-
-const listenToUsers = () => {
-  console.log('👂 INICIANT LISTENER PER USUARIS...');
-  console.log('📍 mapInstanceRef.current:', mapInstanceRef.current);
-  console.log('🎨 Icones disponibles:', {
-    userIcon: !!window.userIcon,
-    currentUserIcon: !!window.currentUserIcon
-  });
-  
-  const unsubscribe = onSnapshot(collection(db, 'userLocations'), (snapshot) => {
-    console.log(`🔥 FIREBASE: Rebudes ${snapshot.size} ubicacions d'usuaris`);
+  // ✅ LISTENER USUARIS MILLORAT
+  const listenToUsers = () => {
+    console.log('👂 INICIANT LISTENER PER USUARIS...');
     
-    if (snapshot.empty) {
-      console.log('⚠️ Cap ubicació trobada a Firebase');
-      return;
-    }
-    
-    const usersData = [];
-    
-    snapshot.forEach((doc) => {
-      const location = doc.data();
-      const userId = doc.id;
-      const isCurrentUser = userId === currentUser?.uid;
+    const unsubscribe = onSnapshot(collection(db, 'userLocations'), (snapshot) => {
+      console.log(`🔥 FIREBASE: Rebudes ${snapshot.size} ubicacions d'usuaris`);
       
-      console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'})`, {
-        lat: location.latitude,
-        lng: location.longitude,
-        timestamp: location.timestamp?.toDate?.()?.toLocaleTimeString() || 'No timestamp'
+      if (snapshot.empty) {
+        console.log('⚠️ Cap ubicació trobada a Firebase');
+        return;
+      }
+      
+      const usersData = [];
+      
+      snapshot.forEach((doc) => {
+        const location = doc.data();
+        const userId = doc.id;
+        const isCurrentUser = userId === currentUser?.uid;
+        
+        console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'})`, {
+          lat: location.latitude,
+          lng: location.longitude,
+          timestamp: location.timestamp?.toDate?.()?.toLocaleTimeString() || 'No timestamp'
+        });
+
+        // ✅ ESPERAR QUE EL MAPA ESTIGUI LLEST
+        const addMarkerWhenReady = () => {
+          if (!mapInstanceRef.current) {
+            console.log(`⏳ Mapa no llest, reintentant en 500ms per ${location.userName}...`);
+            setTimeout(addMarkerWhenReady, 500);
+            return;
+          }
+
+          // Eliminar marker anterior si existeix
+          if (userMarkersRef.current[userId]) {
+            console.log(`🗑️ Eliminant marker anterior per ${location.userName}`);
+            if (mapInstanceRef.current.hasLayer(userMarkersRef.current[userId])) {
+              mapInstanceRef.current.removeLayer(userMarkersRef.current[userId]);
+            }
+            delete userMarkersRef.current[userId];
+          }
+
+          // Crear icones si no existeixen
+          if (!window.userIcon || !window.currentUserIcon) {
+            console.log('🎨 Creant icones perquè no existeixen...');
+            createCustomIcons();
+          }
+          
+          const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
+          console.log(`🎯 Creant marker per ${location.userName} amb icona:`, icon ? 'OK' : 'ERROR');
+          
+          try {
+            const marker = L.marker([location.latitude, location.longitude], {
+              icon: icon
+            }).addTo(mapInstanceRef.current);
+            
+            userMarkersRef.current[userId] = marker;
+
+            marker.bindPopup(`
+              <div style="text-align: center; padding: 0.5rem;">
+                <strong style="color: ${isCurrentUser ? '#2ed573' : '#ffd02e'};">
+                  ${isCurrentUser ? '📍 Tu' : '👤 ' + location.userName}
+                </strong><br>
+                <small style="color: #666;">
+                  Última actualització:<br>
+                  ${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
+                </small>
+              </div>
+            `);
+            
+            console.log(`✅ MARKER CREAT CORRECTAMENT per ${location.userName}`);
+            
+          } catch (error) {
+            console.error(`❌ ERROR creant marker per ${location.userName}:`, error);
+          }
+        };
+
+        // Iniciar el procés d'afegir marker
+        addMarkerWhenReady();
+
+        // Guardar per la llista d'admin
+        if (isAdmin) {
+          usersData.push({
+            ...location,
+            id: userId,
+            isCurrentUser,
+            online: isUserOnline(location.timestamp)
+          });
+        }
       });
 
-      // Eliminar marker anterior si existeix
-      if (userMarkersRef.current[userId]) {
-        console.log(`🗑️ Eliminant marker anterior per ${location.userName}`);
-        if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(userMarkersRef.current[userId])) {
-          mapInstanceRef.current.removeLayer(userMarkersRef.current[userId]);
-        }
-        delete userMarkersRef.current[userId];
-      }
-
-      // Crear marker al mapa
-      if (mapInstanceRef.current && location.latitude && location.longitude) {
-        
-        // Crear icones si no existeixen
-        if (!window.userIcon || !window.currentUserIcon) {
-          console.log('🎨 Creant icones perquè no existeixen...');
-          createCustomIcons();
-        }
-        
-        const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
-        console.log(`🎯 Creant marker per ${location.userName} amb icona:`, icon ? 'OK' : 'ERROR');
-        
-        try {
-          const marker = L.marker([location.latitude, location.longitude], {
-            icon: icon
-          }).addTo(mapInstanceRef.current);
-          
-          userMarkersRef.current[userId] = marker;
-
-          marker.bindPopup(`
-            <div style="text-align: center; padding: 0.5rem;">
-              <strong style="color: ${isCurrentUser ? '#2ed573' : '#ffd02e'};">
-                ${isCurrentUser ? '📍 Tu' : '👤 ' + location.userName}
-              </strong><br>
-              <small style="color: #666;">
-                Última actualització:<br>
-                ${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
-              </small>
-            </div>
-          `);
-          
-          console.log(`✅ MARKER CREAT CORRECTAMENT per ${location.userName}`);
-          
-        } catch (error) {
-          console.error(`❌ ERROR creant marker per ${location.userName}:`, error);
-        }
-      } else {
-        console.log(`❌ NO ES POT CREAR MARKER per ${location.userName}:`, {
-          mapExists: !!mapInstanceRef.current,
-          hasLat: !!location.latitude,
-          hasLng: !!location.longitude
-        });
-      }
-
-      // Guardar per la llista d'admin
+      // Actualitzar llista si som admin
       if (isAdmin) {
-        usersData.push({
-          ...location,
-          id: userId,
-          isCurrentUser,
-          online: isUserOnline(location.timestamp)
-        });
+        setUsers(usersData);
+        console.log(`👑 ADMIN: Llista usuaris actualitzada amb ${usersData.length} usuaris`);
       }
+      
+    }, (error) => {
+      console.error('❌ ERROR escoltant usuaris:', error);
+      showNotification('Error carregant ubicacions d\'usuaris', 'error');
     });
 
-    // Actualitzar llista si som admin
-    if (isAdmin) {
-      setUsers(usersData);
-      console.log(`👑 ADMIN: Llista usuaris actualitzada amb ${usersData.length} usuaris`);
-    }
-    
-    console.log(`🎯 RESUM: ${snapshot.size} usuaris, ${Object.keys(userMarkersRef.current).length} markers al mapa`);
-    
-  }, (error) => {
-    console.error('❌ ERROR escoltant usuaris:', error);
-    showNotification('Error carregant ubicacions d\'usuaris', 'error');
-  });
+    return unsubscribe;
+  };
 
-  return unsubscribe;
-};
-
+  // ✅ LISTENER INCIDÈNCIES MILLORAT
   const listenToIncidents = () => {
+    console.log('🚨 INICIANT LISTENER PER INCIDÈNCIES...');
+    
     const q = query(collection(db, 'incidents'), where('resolved', '==', false));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log(`🚨 FIREBASE: Rebudes ${snapshot.size} incidències actives`);
+      
       const incidentsData = [];
       
+      // ✅ NETEJAR MARKERS D'INCIDÈNCIES EXISTENTS
       if (mapInstanceRef.current) {
         mapInstanceRef.current.eachLayer(layer => {
           if (layer.options && layer.options.className === 'incident-marker') {
@@ -669,30 +676,64 @@ const listenToUsers = () => {
         const incident = { id: doc.id, ...doc.data() };
         incidentsData.push(incident);
 
-        if (mapInstanceRef.current && incident.location) {
-          const marker = L.marker([incident.location.latitude, incident.location.longitude], {
-            icon: window.incidentIcon,
-            className: 'incident-marker'
-          }).addTo(mapInstanceRef.current);
+        console.log(`🚨 INCIDÈNCIA: ${incident.userName} a [${incident.location?.latitude}, ${incident.location?.longitude}]`);
 
-          marker.bindPopup(`
-            <div style="text-align: center; padding: 0.5rem;">
-              <strong style="color: #ff4757;">🚨 INCIDÈNCIA</strong><br>
-              <strong>Usuari:</strong> ${incident.userName}<br>
-              <strong>Missatge:</strong> ${incident.message || 'Incidència reportada'}<br>
-              <small style="color: #666;">
-                ${incident.timestamp ? new Date(incident.timestamp.toDate()).toLocaleString() : 'Ara'}
-              </small>
-            </div>
-          `);
-        }
+        // ✅ AFEGIR MARKER QUAN EL MAPA ESTIGUI LLEST
+        const addIncidentMarkerWhenReady = () => {
+          if (!mapInstanceRef.current) {
+            console.log(`⏳ Mapa no llest per incidència, reintentant en 500ms...`);
+            setTimeout(addIncidentMarkerWhenReady, 500);
+            return;
+          }
+
+          if (!incident.location) {
+            console.log(`⚠️ Incidència sense ubicació: ${incident.userName}`);
+            return;
+          }
+
+          // Crear icona si no existeix
+          if (!window.incidentIcon) {
+            console.log('🎨 Creant icona incidència...');
+            createCustomIcons();
+          }
+
+          try {
+            const marker = L.marker([incident.location.latitude, incident.location.longitude], {
+              icon: window.incidentIcon,
+              className: 'incident-marker'
+            }).addTo(mapInstanceRef.current);
+
+            marker.bindPopup(`
+              <div style="text-align: center; padding: 0.5rem;">
+                <strong style="color: #ff4757;">🚨 INCIDÈNCIA</strong><br>
+                <strong>Usuari:</strong> ${incident.userName}<br>
+                <strong>Missatge:</strong> ${incident.message || 'Incidència reportada'}<br>
+                <small style="color: #666;">
+                  ${incident.timestamp ? new Date(incident.timestamp.toDate()).toLocaleString() : 'Ara'}
+                </small>
+              </div>
+            `);
+
+            console.log(`✅ MARKER D'INCIDÈNCIA CREAT per ${incident.userName}`);
+          } catch (error) {
+            console.error(`❌ ERROR creant marker d'incidència:`, error);
+          }
+        };
+
+        addIncidentMarkerWhenReady();
       });
 
       setIncidents(incidentsData);
+      console.log(`🚨 ${incidentsData.length} incidències carregades al state`);
+      
+    }, (error) => {
+      console.error('❌ ERROR escoltant incidències:', error);
+      showNotification('Error carregant incidències', 'error');
     });
 
     return unsubscribe;
   };
+
   const isUserOnline = (timestamp) => {
     if (!timestamp) return false;
     const now = new Date();
@@ -700,7 +741,6 @@ const listenToUsers = () => {
     return (now - lastUpdate) < 300000;
   };
 
-  // SUBSTITUEIX la funció startLocationTracking (al voltant de la línia 603):
   const startLocationTracking = () => {
     if (!navigator.geolocation) {
       console.log('❌ Geolocalització no disponible');
@@ -780,6 +820,7 @@ const listenToUsers = () => {
       }
     );
   };
+
   const updateUserLocation = async (lat, lng) => {
     if (!currentUser) return;
     try {
@@ -869,6 +910,7 @@ const listenToUsers = () => {
 
     return R * c;
   };
+
   const reportIncident = async () => {
     const message = prompt('Descriu la incidència (opcional):');
     if (navigator.geolocation) {
@@ -901,6 +943,7 @@ const listenToUsers = () => {
       showNotification('No es pot obtenir la ubicació', 'error');
     }
   };
+
   const resolveIncident = async (incidentId) => {
     try {
       await updateDoc(doc(db, 'incidents', incidentId), {
@@ -959,8 +1002,7 @@ const listenToUsers = () => {
             <span className="text-gray-800">GPS</span>
           </h2>
 
-          <div 
-className="flex mb-6 rounded-2xl overflow-hidden bg-gray-100">
+          <div className="flex mb-6 rounded-2xl overflow-hidden bg-gray-100">
             <button
               className={`flex-1 p-3 font-semibold transition-all ${
                 authTab === 'login' 
@@ -1304,8 +1346,7 @@ className="flex mb-6 rounded-2xl overflow-hidden bg-gray-100">
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
         {/* Sidebar - Routes */}
         <div className="lg:col-span-1">
-          <div className="bg-white 
-rounded-2xl shadow-lg p-6 sticky top-24">
+          <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-24">
             <h3 className="text-lg font-bold mb-4 border-b-2 border-yellow-500 pb-2">
               Rutes Disponibles
             </h3>
@@ -1391,17 +1432,3 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
