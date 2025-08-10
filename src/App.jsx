@@ -159,24 +159,29 @@ useEffect(() => {
   };
 }, []); // ✅ ARRAY DE DEPENDÈNCIES BUIT - només s'executa un cop!
   
-  // Load data when user changes
-  useEffect(() => {
-    if (currentUser) {
-      loadRoutes();
-      if (isAdmin) {
-        listenToUsers();
-        listenToIncidents();
-      }
-      startLocationTracking();
+// SUBSTITUEIX el useEffect que carrega dades (línia 175) per aquest:
+useEffect(() => {
+  if (currentUser) {
+    loadRoutes();
+    if (isAdmin) {
+      listenToUsers();
+      listenToIncidents();
     }
     
-    return () => {
-      if (watchIdRef.current) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-    };
-  }, [currentUser, isAdmin]);
+    // Només inicia el seguiment si no està ja actiu
+    if (!watchIdRef.current) {
+      startLocationTracking();
+    }
+  }
+  
+  return () => {
+    // Neteja el seguiment d'ubicació quan l'usuari canvia o es desmunta
+    if (watchIdRef.current) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  };
+}, [currentUser, isAdmin]); // Dependències correctes
   const checkAdminStatus = async (user) => {
     try {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -1256,5 +1261,6 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
