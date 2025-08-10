@@ -262,30 +262,45 @@ useEffect(() => {
   };
   // SUBSTITUEIX la funció createCustomIcons (al voltant de la línia 224):
 
+// MODIFICA la funció createCustomIcons per afegir més debug:
+
 const createCustomIcons = () => {
-  console.log('🎨 Creant icones personalitzades...');
-  // User icon
-  window.userIcon = L.divIcon({
-    className: 'custom-user-marker',
-    html: '<div style="background: linear-gradient(145deg, #ffd02e, #ffcc00); border: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(255,208,46,0.5);"><span style="font-size: 12px; color: #1a1a1a;">👤</span></div>',
-    iconSize: [24, 24],
-    iconAnchor: [12, 12]
-  });
-  // Current user icon
-  window.currentUserIcon = L.divIcon({
-    className: 'custom-current-user-marker',
-    html: '<div style="background: linear-gradient(145deg, #2ed573, #26d0ce); border: 3px solid #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46,213,115,0.6);"><span style="font-size: 14px; color: white;">📍</span></div>',
-    iconSize: [28, 28],
-    iconAnchor: [14, 14]
-  });
-  // Incident icon
-  window.incidentIcon = L.divIcon({
-    className: 'custom-incident-marker',
-    html: '<div style="background: linear-gradient(145deg, #ff4757, #ff3838); border: 3px solid #fff; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.5); animation: pulse 2s infinite;"><span style="color: white; font-size: 16px;">🚨</span></div>',
-    iconSize: [30, 30],
-    iconAnchor: [15, 15]
-  });
-  console.log('✅ Icones creades correctament');
+  console.log('🎨 CREANT ICONES PERSONALITZADES...');
+  
+  try {
+    // User icon
+    window.userIcon = L.divIcon({
+      className: 'custom-user-marker',
+      html: '<div style="background: linear-gradient(145deg, #ffd02e, #ffcc00); border: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(255,208,46,0.5);"><span style="font-size: 12px; color: #1a1a1a;">👤</span></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    });
+    
+    // Current user icon
+    window.currentUserIcon = L.divIcon({
+      className: 'custom-current-user-marker',
+      html: '<div style="background: linear-gradient(145deg, #2ed573, #26d0ce); border: 3px solid #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46,213,115,0.6);"><span style="font-size: 14px; color: white;">📍</span></div>',
+      iconSize: [28, 28],
+      iconAnchor: [14, 14]
+    });
+    
+    // Incident icon
+    window.incidentIcon = L.divIcon({
+      className: 'custom-incident-marker',
+      html: '<div style="background: linear-gradient(145deg, #ff4757, #ff3838); border: 3px solid #fff; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.5); animation: pulse 2s infinite;"><span style="color: white; font-size: 16px;">🚨</span></div>',
+      iconSize: [30, 30],
+      iconAnchor: [15, 15]
+    });
+    
+    console.log('✅ ICONES CREADES:', {
+      userIcon: !!window.userIcon,
+      currentUserIcon: !!window.currentUserIcon,
+      incidentIcon: !!window.incidentIcon
+    });
+    
+  } catch (error) {
+    console.error('❌ ERROR creant icones:', error);
+  }
 };
 
   const showNotification = (message, type = 'info') => {
@@ -1364,6 +1379,7 @@ rounded-2xl shadow-lg p-6 sticky top-24">
 };
 
 export default BikeGPSApp;
+
 
 
 
