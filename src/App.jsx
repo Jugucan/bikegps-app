@@ -46,9 +46,10 @@ const BikeGPSApp = () => {
   const mapInstanceRef = useRef(null);
   const watchIdRef = useRef(null);
   const userMarkersRef = useRef({});
+  const incidentMarkersRef = useRef({});  // ✅ Nou ref per incidències
   const routePolylinesRef = useRef([]);
   const hasSetInitialLocationRef = useRef(false);
-  const listenersRef = useRef({ users: null, incidents: null }); // ✅ Nou ref per listeners
+  const listenersRef = useRef({ users: null, incidents: null });
 
   // Debug inicial - només un cop
   useEffect(() => {
@@ -134,9 +135,9 @@ const BikeGPSApp = () => {
       listenersRef.current.users = listenToUsers();
     }
     
-    // Iniciar listener d'incidències si som admin
-    if (isAdmin && !listenersRef.current.incidents) {
-      console.log('🚨 Iniciant listener incidències (admin)...');
+    // Iniciar listener d'incidències sempre (tant per admin com per usuaris)
+    if (!listenersRef.current.incidents) {
+      console.log('🚨 Iniciant listener incidències...');
       listenersRef.current.incidents = listenToIncidents();
     }
 
@@ -151,7 +152,7 @@ const BikeGPSApp = () => {
         listenersRef.current.incidents = null;
       }
     };
-  }, [currentUser, isAdmin]); // ✅ Només depèn d'usuari i admin status
+  }, [currentUser]); // ✅ Només depèn d'usuari
 
   // ✅ MAPA - Separat dels listeners
   useEffect(() => {
@@ -282,57 +283,72 @@ const BikeGPSApp = () => {
     }
   };
 
+  // ✅ ICONES MILLORADES AMB SVG SIMPLE
   const createCustomIcons = () => {
-    console.log('🎨 CREANT ICONES ESTÀNDARD LEAFLET...');
+    console.log('🎨 CREANT ICONES PERSONALITZADES...');
     
     try {
-      // ✅ ICONES ESTÀNDARD LEAFLET amb colors personalitzats
+      // ✅ USER ICON (groc) - SVG més simple
+      const userIconSVG = `<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#ffd02e" stroke="#fff" stroke-width="2" d="M12.5 0C5.607 0 0 5.607 0 12.5c0 10.5 12.5 28.5 12.5 28.5s12.5-18 12.5-28.5C25 5.607 19.393 0 12.5 0z"/>
+        <circle fill="#1a1a1a" cx="12.5" cy="12.5" r="6"/>
+        <circle fill="#fff" cx="12.5" cy="12.5" r="3"/>
+      </svg>`;
       
-      // User icon (groc)
       window.userIcon = new L.Icon({
-        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-          <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
-            <path fill="#ffd02e" stroke="#fff" stroke-width="2" d="M12.5 0C5.607 0 0 5.607 0 12.5c0 10.5 12.5 28.5 12.5 28.5s12.5-18 12.5-28.5C25 5.607 19.393 0 12.5 0z"/>
-            <circle fill="#1a1a1a" cx="12.5" cy="12.5" r="6"/>
-            <text x="12.5" y="16" text-anchor="middle" font-size="8" fill="#fff">👤</text>
-          </svg>
-        `),
+        iconUrl: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(userIconSVG),
         iconSize: [25, 41],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34]
       });
       
-      // Current user icon (verd)
+      // ✅ CURRENT USER ICON (verd) - SVG més simple
+      const currentUserIconSVG = `<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#2ed573" stroke="#fff" stroke-width="2" d="M12.5 0C5.607 0 0 5.607 0 12.5c0 10.5 12.5 28.5 12.5 28.5s12.5-18 12.5-28.5C25 5.607 19.393 0 12.5 0z"/>
+        <circle fill="#fff" cx="12.5" cy="12.5" r="6"/>
+        <circle fill="#2ed573" cx="12.5" cy="12.5" r="3"/>
+      </svg>`;
+      
       window.currentUserIcon = new L.Icon({
-        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-          <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
-            <path fill="#2ed573" stroke="#fff" stroke-width="2" d="M12.5 0C5.607 0 0 5.607 0 12.5c0 10.5 12.5 28.5 12.5 28.5s12.5-18 12.5-28.5C25 5.607 19.393 0 12.5 0z"/>
-            <circle fill="#fff" cx="12.5" cy="12.5" r="6"/>
-            <text x="12.5" y="16" text-anchor="middle" font-size="8" fill="#2ed573">📍</text>
-          </svg>
-        `),
+        iconUrl: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(currentUserIconSVG),
         iconSize: [25, 41],
         iconAnchor: [12, 41],
         popupAnchor: [1, -34]
       });
       
-      // Incident icon (vermell)
-      window.incidentIcon = new L.Icon({
-        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
-          <svg width="30" height="46" viewBox="0 0 30 46" xmlns="http://www.w3.org/2000/svg">
-            <path fill="#ff4757" stroke="#fff" stroke-width="3" d="M15 0C7.268 0 1 6.268 1 14c0 12.25 14 31 14 31s14-18.75 14-31C29 6.268 22.732 0 15 0z"/>
-            <circle fill="#fff" cx="15" cy="14" r="8"/>
-            <text x="15" y="18" text-anchor="middle" font-size="10" fill="#ff4757">🚨</text>
-          </svg>
-        `),
+      // ✅ ADMIN ICON (blau) - Nova icona diferenciada
+      const adminIconSVG = `<svg width="30" height="46" viewBox="0 0 30 46" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#3742fa" stroke="#fff" stroke-width="3" d="M15 0C7.268 0 1 6.268 1 14c0 12.25 14 31 14 31s14-18.75 14-31C29 6.268 22.732 0 15 0z"/>
+        <circle fill="#fff" cx="15" cy="14" r="8"/>
+        <polygon fill="#3742fa" points="15,8 17,12 21,12 18,15 19,19 15,17 11,19 12,15 9,12 13,12" stroke="#fff" stroke-width="1"/>
+      </svg>`;
+      
+      window.adminIcon = new L.Icon({
+        iconUrl: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(adminIconSVG),
         iconSize: [30, 46],
         iconAnchor: [15, 46],
         popupAnchor: [1, -40]
       });
       
-      console.log('✅ ICONES ESTÀNDARD LEAFLET CREADES:', {
+      // ✅ INCIDENT ICON (vermell) - SVG més simple
+      const incidentIconSVG = `<svg width="30" height="46" viewBox="0 0 30 46" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#ff4757" stroke="#fff" stroke-width="3" d="M15 0C7.268 0 1 6.268 1 14c0 12.25 14 31 14 31s14-18.75 14-31C29 6.268 22.732 0 15 0z"/>
+        <circle fill="#fff" cx="15" cy="14" r="8"/>
+        <polygon fill="#ff4757" points="15,6 17,12 13,12"/>
+        <circle fill="#ff4757" cx="15" cy="17" r="1.5"/>
+      </svg>`;
+      
+      window.incidentIcon = new L.Icon({
+        iconUrl: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(incidentIconSVG),
+        iconSize: [30, 46],
+        iconAnchor: [15, 46],
+        popupAnchor: [1, -40]
+      });
+      
+      console.log('✅ ICONES CREADES CORRECTAMENT:', {
         userIcon: !!window.userIcon,
         currentUserIcon: !!window.currentUserIcon,
+        adminIcon: !!window.adminIcon,
         incidentIcon: !!window.incidentIcon
       });
       
@@ -343,6 +359,7 @@ const BikeGPSApp = () => {
       console.log('🔄 Usant icones per defecte...');
       window.userIcon = new L.Icon.Default();
       window.currentUserIcon = new L.Icon.Default();
+      window.adminIcon = new L.Icon.Default();
       window.incidentIcon = new L.Icon.Default();
     }
   };
@@ -574,11 +591,11 @@ const BikeGPSApp = () => {
     }
   };
 
-  // ✅ LISTENER USUARIS MILLORAT
+  // ✅ LISTENER USUARIS MILLORAT AMB ICONA ADMIN
   const listenToUsers = () => {
     console.log('👂 INICIANT LISTENER PER USUARIS...');
     
-    const unsubscribe = onSnapshot(collection(db, 'userLocations'), (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'userLocations'), async (snapshot) => {
       console.log(`🔥 FIREBASE: Rebudes ${snapshot.size} ubicacions d'usuaris`);
       
       if (snapshot.empty) {
@@ -588,12 +605,26 @@ const BikeGPSApp = () => {
       
       const usersData = [];
       
-      snapshot.forEach((doc) => {
-        const location = doc.data();
-        const userId = doc.id;
+      for (const docSnapshot of snapshot.docs) {
+        const location = docSnapshot.data();
+        const userId = docSnapshot.id;
         const isCurrentUser = userId === currentUser?.uid;
         
-        console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'})`, {
+        // ✅ OBTENIR INFORMACIÓ D'ADMIN DE CADA USUARI
+        let userIsAdmin = false;
+        let userIsSuperAdmin = false;
+        try {
+          const userDoc = await getDoc(doc(db, 'users', userId));
+          const userData = userDoc.data();
+          if (userData) {
+            userIsAdmin = userData.isAdmin === true;
+            userIsSuperAdmin = userData.isSuperAdmin === true;
+          }
+        } catch (error) {
+          console.log('⚠️ No es pot obtenir info admin per', userId);
+        }
+        
+        console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'}${userIsAdmin ? ' - ADMIN' : ''}${userIsSuperAdmin ? ' - SUPER' : ''})`, {
           lat: location.latitude,
           lng: location.longitude,
           timestamp: location.timestamp?.toDate?.()?.toLocaleTimeString() || 'No timestamp'
@@ -617,13 +648,20 @@ const BikeGPSApp = () => {
           }
 
           // Crear icones si no existeixen
-          if (!window.userIcon || !window.currentUserIcon) {
+          if (!window.userIcon || !window.currentUserIcon || !window.adminIcon) {
             console.log('🎨 Creant icones perquè no existeixen...');
             createCustomIcons();
           }
           
-          const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
-          console.log(`🎯 Creant marker per ${location.userName} amb icona:`, icon ? 'OK' : 'ERROR');
+          // ✅ SELECCIONAR ICONA SEGONS EL TIPUS D'USUARI
+          let icon;
+          if (isCurrentUser) {
+            icon = userIsAdmin ? window.adminIcon : window.currentUserIcon;
+          } else {
+            icon = userIsAdmin ? window.adminIcon : window.userIcon;
+          }
+          
+          console.log(`🎯 Creant marker per ${location.userName} amb icona:`, icon ? 'OK' : 'ERROR', userIsAdmin ? '(ADMIN)' : '(USER)');
           
           try {
             const marker = L.marker([location.latitude, location.longitude], {
@@ -632,11 +670,21 @@ const BikeGPSApp = () => {
             
             userMarkersRef.current[userId] = marker;
 
+            // ✅ POPUP AMB INFORMACIÓ MILLORADA
+            const userTypeLabel = isCurrentUser 
+              ? (userIsAdmin ? '👑 Tu (Admin)' : '📍 Tu') 
+              : (userIsAdmin ? '👑 ' + location.userName + ' (Admin)' : '👤 ' + location.userName);
+            
+            const userTypeColor = isCurrentUser 
+              ? (userIsAdmin ? '#3742fa' : '#2ed573')
+              : (userIsAdmin ? '#3742fa' : '#ffd02e');
+
             marker.bindPopup(`
               <div style="text-align: center; padding: 0.5rem;">
-                <strong style="color: ${isCurrentUser ? '#2ed573' : '#ffd02e'};">
-                  ${isCurrentUser ? '📍 Tu' : '👤 ' + location.userName}
+                <strong style="color: ${userTypeColor};">
+                  ${userTypeLabel}
                 </strong><br>
+                ${userIsAdmin ? '<small style="color: #3742fa; font-weight: bold;">ADMINISTRADOR</small><br>' : ''}
                 <small style="color: #666;">
                   Última actualització:<br>
                   ${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
@@ -644,7 +692,7 @@ const BikeGPSApp = () => {
               </div>
             `);
             
-            console.log(`✅ MARKER CREAT CORRECTAMENT per ${location.userName}`);
+            console.log(`✅ MARKER CREAT CORRECTAMENT per ${location.userName} ${userIsAdmin ? '(ADMIN)' : '(USER)'}`);
             
           } catch (error) {
             console.error(`❌ ERROR creant marker per ${location.userName}:`, error);
@@ -660,10 +708,12 @@ const BikeGPSApp = () => {
             ...location,
             id: userId,
             isCurrentUser,
+            isAdmin: userIsAdmin,
+            isSuperAdmin: userIsSuperAdmin,
             online: isUserOnline(location.timestamp)
           });
         }
-      });
+      }
 
       // Actualitzar llista si som admin
       if (isAdmin) {
@@ -679,7 +729,7 @@ const BikeGPSApp = () => {
     return unsubscribe;
   };
 
-  // ✅ LISTENER INCIDÈNCIES MILLORAT
+  // ✅ LISTENER INCIDÈNCIES COMPLETAMENT REESCRIT I MILLORAT
   const listenToIncidents = () => {
     console.log('🚨 INICIANT LISTENER PER INCIDÈNCIES...');
     
@@ -689,31 +739,34 @@ const BikeGPSApp = () => {
       
       const incidentsData = [];
       
-      // ✅ NETEJAR MARKERS D'INCIDÈNCIES EXISTENTS
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.eachLayer(layer => {
-          if (layer.options && layer.options.className === 'incident-marker') {
-            mapInstanceRef.current.removeLayer(layer);
-          }
-        });
-      }
+      // ✅ NETEJAR TOTS ELS MARKERS D'INCIDÈNCIES EXISTENTS
+      console.log('🧹 Netejant markers d\'incidències existents...');
+      Object.keys(incidentMarkersRef.current).forEach(incidentId => {
+        const marker = incidentMarkersRef.current[incidentId];
+        if (mapInstanceRef.current && marker && mapInstanceRef.current.hasLayer(marker)) {
+          mapInstanceRef.current.removeLayer(marker);
+          console.log(`🗑️ Marker d'incidència ${incidentId} eliminat`);
+        }
+        delete incidentMarkersRef.current[incidentId];
+      });
 
+      // ✅ PROCESSAR CADA INCIDÈNCIA I CREAR MARKERS
       snapshot.forEach((doc) => {
         const incident = { id: doc.id, ...doc.data() };
         incidentsData.push(incident);
 
-        console.log(`🚨 INCIDÈNCIA: ${incident.userName} a [${incident.location?.latitude}, ${incident.location?.longitude}]`);
+        console.log(`🚨 PROCESSANT INCIDÈNCIA: ${incident.userName} a [${incident.location?.latitude}, ${incident.location?.longitude}]`);
 
         // ✅ AFEGIR MARKER QUAN EL MAPA ESTIGUI LLEST
         const addIncidentMarkerWhenReady = () => {
           if (!mapInstanceRef.current) {
-            console.log(`⏳ Mapa no llest per incidència, reintentant en 500ms...`);
+            console.log(`⏳ Mapa no llest per incidència ${incident.id}, reintentant en 500ms...`);
             setTimeout(addIncidentMarkerWhenReady, 500);
             return;
           }
 
-          if (!incident.location) {
-            console.log(`⚠️ Incidència sense ubicació: ${incident.userName}`);
+          if (!incident.location || !incident.location.latitude || !incident.location.longitude) {
+            console.log(`⚠️ Incidència ${incident.id} sense ubicació vàlida:`, incident.location);
             return;
           }
 
@@ -721,46 +774,70 @@ const BikeGPSApp = () => {
           if (!window.incidentIcon) {
             console.log('🎨 Creant icona incidència...');
             createCustomIcons();
+            
+            // Esperar una mica perquè es creï la icona
+            setTimeout(addIncidentMarkerWhenReady, 100);
+            return;
           }
 
           try {
+            console.log(`🚨 CREANT MARKER per incidència ${incident.id} a [${incident.location.latitude}, ${incident.location.longitude}]`);
+            
             const marker = L.marker([incident.location.latitude, incident.location.longitude], {
               icon: window.incidentIcon,
-              className: 'incident-marker'
+              zIndexOffset: 1000 // ✅ Posar les incidències per damunt
             }).addTo(mapInstanceRef.current);
 
-            marker.bindPopup(`
-              <div style="text-align: center; padding: 0.5rem;">
-                <strong style="color: #ff4757;">🚨 INCIDÈNCIA</strong><br>
-                <strong>Usuari:</strong> ${incident.userName}<br>
-                <strong>Missatge:</strong> ${incident.message || 'Incidència reportada'}<br>
-                <small style="color: #666;">
-                  ${incident.timestamp ? new Date(incident.timestamp.toDate()).toLocaleString() : 'Ara'}
-                </small>
-              </div>
-            `);
+            // ✅ GUARDAR REFERÈNCIA AL MARKER
+            incidentMarkersRef.current[incident.id] = marker;
 
-            console.log(`✅ MARKER D'INCIDÈNCIA CREAT per ${incident.userName}`);
-            
-            // ✅ DEBUG EXTRA: Verificar markers d'incidències
-            const incidentMarkers = [];
-            mapInstanceRef.current.eachLayer(layer => {
-              if (layer.options && layer.options.className === 'incident-marker') {
-                incidentMarkers.push(layer);
-              }
+            // ✅ POPUP AMB INFORMACIÓ DETALLADA
+            const popupContent = `
+              <div style="text-align: center; padding: 0.5rem; min-width: 200px;">
+                <strong style="color: #ff4757; font-size: 16px;">🚨 INCIDÈNCIA</strong><br><br>
+                <strong>Usuari:</strong> ${incident.userName}<br>
+                <strong>Missatge:</strong><br>
+                <em style="color: #333;">${incident.message || 'Incidència reportada sense missatge'}</em><br><br>
+                <small style="color: #666;">
+                  <strong>Reportada:</strong><br>
+                  ${incident.timestamp ? new Date(incident.timestamp.toDate()).toLocaleString() : 'Data desconeguda'}
+                </small>
+                ${isAdmin ? `<br><br><button onclick="window.resolveIncidentFromMap('${incident.id}')" style="background: #2ed573; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">✅ Resoldre</button>` : ''}
+              </div>
+            `;
+
+            marker.bindPopup(popupContent, {
+              maxWidth: 250,
+              className: 'incident-popup'
             });
-            console.log(`📊 TOTAL MARKERS D'INCIDÈNCIES AL MAPA: ${incidentMarkers.length}`);
+
+            console.log(`✅ MARKER D'INCIDÈNCIA ${incident.id} CREAT CORRECTAMENT per ${incident.userName}`);
             
           } catch (error) {
-            console.error(`❌ ERROR creant marker d'incidència:`, error);
+            console.error(`❌ ERROR creant marker d'incidència ${incident.id}:`, error);
           }
         };
 
+        // Iniciar procés de creació de marker
         addIncidentMarkerWhenReady();
       });
 
+      // ✅ ACTUALITZAR ESTAT D'INCIDÈNCIES
       setIncidents(incidentsData);
-      console.log(`🚨 ${incidentsData.length} incidències carregades al state`);
+      console.log(`🚨 ${incidentsData.length} incidències carregades al state i ${Object.keys(incidentMarkersRef.current).length} markers creats`);
+      
+      // ✅ DEBUG FINAL
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          let totalIncidentMarkers = 0;
+          mapInstanceRef.current.eachLayer(layer => {
+            if (layer.options && layer.options.icon === window.incidentIcon) {
+              totalIncidentMarkers++;
+            }
+          });
+          console.log(`📊 VERIFICACIÓ FINAL: ${totalIncidentMarkers} markers d'incidències visibles al mapa`);
+        }
+      }, 1000);
       
     }, (error) => {
       console.error('❌ ERROR escoltant incidències:', error);
@@ -769,6 +846,18 @@ const BikeGPSApp = () => {
 
     return unsubscribe;
   };
+
+  // ✅ FUNCIÓ GLOBAL PER RESOLDRE INCIDÈNCIES DES DEL POPUP
+  useEffect(() => {
+    window.resolveIncidentFromMap = async (incidentId) => {
+      console.log('🎯 Resolent incidència des del mapa:', incidentId);
+      await resolveIncident(incidentId);
+    };
+    
+    return () => {
+      delete window.resolveIncidentFromMap;
+    };
+  }, []);
 
   const isUserOnline = (timestamp) => {
     if (!timestamp) return false;
@@ -1287,7 +1376,11 @@ const BikeGPSApp = () => {
                   users.map((user) => (
                     <div key={user.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
                       <div>
-                        <strong className="text-gray-800">{user.userName} {user.isCurrentUser && '(Tu)'}</strong>
+                        <strong className="text-gray-800">
+                          {user.isAdmin ? '👑 ' : ''}{user.userName} 
+                          {user.isCurrentUser && ' (Tu)'}
+                          {user.isAdmin && ' (Admin)'}
+                        </strong>
                         <div className="text-gray-500 text-xs">
                           {user.timestamp ? new Date(user.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
                         </div>
@@ -1302,7 +1395,7 @@ const BikeGPSApp = () => {
             {/* Incidents List */}
             <div className="bg-white rounded-2xl shadow-lg p-6">
               <h3 className="text-lg font-bold mb-4 border-b-2 border-red-500 pb-2">
-                Incidències Actives
+                Incidències Actives ({incidents.length})
               </h3>
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {incidents.length === 0 ? (
@@ -1323,6 +1416,11 @@ const BikeGPSApp = () => {
                       <p className="text-gray-500 text-xs">
                         {incident.timestamp ? new Date(incident.timestamp.toDate()).toLocaleString() : 'Ara'}
                       </p>
+                      {incident.location && (
+                        <p className="text-gray-500 text-xs mt-1">
+                          📍 {incident.location.latitude.toFixed(6)}, {incident.location.longitude.toFixed(6)}
+                        </p>
+                      )}
                     </div>
                   ))
                 )}
@@ -1382,7 +1480,7 @@ const BikeGPSApp = () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 p-6">
         {/* Sidebar - Routes */}
         <div className="lg:col-span-1">
-          <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-24">
+          <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-24 mb-6">
             <h3 className="text-lg font-bold mb-4 border-b-2 border-yellow-500 pb-2">
               Rutes Disponibles
             </h3>
@@ -1413,6 +1511,33 @@ const BikeGPSApp = () => {
               )}
             </div>
           </div>
+
+          {/* Incidents Panel for Users - Shows active incidents */}
+          {incidents.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-96">
+              <h3 className="text-lg font-bold mb-4 border-b-2 border-red-500 pb-2">
+                🚨 Incidències Actives ({incidents.length})
+              </h3>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {incidents.map((incident) => (
+                  <div key={incident.id} className="bg-red-50 p-3 rounded-lg border-l-4 border-red-500">
+                    <div className="flex items-center justify-between mb-1">
+                      <strong className="text-red-600 text-sm">🚨 {incident.userName}</strong>
+                      <span className="text-xs text-gray-500">
+                        {incident.timestamp ? new Date(incident.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
+                      </span>
+                    </div>
+                    <p className="text-gray-700 text-xs">{incident.message || 'Incidència reportada'}</p>
+                    {incident.location && (
+                      <p className="text-gray-500 text-xs mt-1">
+                        📍 Veure al mapa
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Map */}
@@ -1434,6 +1559,15 @@ const BikeGPSApp = () => {
                     <span className="text-gray-600">
                       {isReturning ? 'Tornant' : 'Anant'} - {Math.round(routeProgress * 100)}% completat
                     </span>
+                  </span>
+                </div>
+              )}
+
+              {/* Incidents Counter */}
+              {incidents.length > 0 && (
+                <div className="absolute top-4 right-4 bg-red-500 bg-opacity-95 px-4 py-2 rounded-xl shadow-lg">
+                  <span className="text-white text-sm font-bold">
+                    🚨 {incidents.length} Incidència{incidents.length !== 1 ? 's' : ''} activa{incidents.length !== 1 ? 's' : ''}
                   </span>
                 </div>
               )}
