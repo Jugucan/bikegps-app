@@ -283,34 +283,54 @@ const BikeGPSApp = () => {
   };
 
   const createCustomIcons = () => {
-    console.log('🎨 CREANT ICONES PERSONALITZADES...');
+    console.log('🎨 CREANT ICONES ESTÀNDARD LEAFLET...');
     
     try {
-      // User icon
-      window.userIcon = L.divIcon({
-        className: 'custom-user-marker',
-        html: '<div style="background: linear-gradient(145deg, #ffd02e, #ffcc00); border: 3px solid #fff; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 8px rgba(255,208,46,0.5);"><span style="font-size: 12px; color: #1a1a1a;">👤</span></div>',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+      // ✅ ICONES ESTÀNDARD LEAFLET amb colors personalitzats
+      
+      // User icon (groc)
+      window.userIcon = new L.Icon({
+        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+          <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#ffd02e" stroke="#fff" stroke-width="2" d="M12.5 0C5.607 0 0 5.607 0 12.5c0 10.5 12.5 28.5 12.5 28.5s12.5-18 12.5-28.5C25 5.607 19.393 0 12.5 0z"/>
+            <circle fill="#1a1a1a" cx="12.5" cy="12.5" r="6"/>
+            <text x="12.5" y="16" text-anchor="middle" font-size="8" fill="#fff">👤</text>
+          </svg>
+        `),
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34]
       });
       
-      // Current user icon
-      window.currentUserIcon = L.divIcon({
-        className: 'custom-current-user-marker',
-        html: '<div style="background: linear-gradient(145deg, #2ed573, #26d0ce); border: 3px solid #fff; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(46,213,115,0.6);"><span style="font-size: 14px; color: white;">📍</span></div>',
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
+      // Current user icon (verd)
+      window.currentUserIcon = new L.Icon({
+        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+          <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#2ed573" stroke="#fff" stroke-width="2" d="M12.5 0C5.607 0 0 5.607 0 12.5c0 10.5 12.5 28.5 12.5 28.5s12.5-18 12.5-28.5C25 5.607 19.393 0 12.5 0z"/>
+            <circle fill="#fff" cx="12.5" cy="12.5" r="6"/>
+            <text x="12.5" y="16" text-anchor="middle" font-size="8" fill="#2ed573">📍</text>
+          </svg>
+        `),
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34]
       });
       
-      // Incident icon
-      window.incidentIcon = L.divIcon({
-        className: 'custom-incident-marker',
-        html: '<div style="background: linear-gradient(145deg, #ff4757, #ff3838); border: 3px solid #fff; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(255, 71, 87, 0.5); animation: pulse 2s infinite;"><span style="color: white; font-size: 16px;">🚨</span></div>',
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
+      // Incident icon (vermell)
+      window.incidentIcon = new L.Icon({
+        iconUrl: 'data:image/svg+xml;base64,' + btoa(`
+          <svg width="30" height="46" viewBox="0 0 30 46" xmlns="http://www.w3.org/2000/svg">
+            <path fill="#ff4757" stroke="#fff" stroke-width="3" d="M15 0C7.268 0 1 6.268 1 14c0 12.25 14 31 14 31s14-18.75 14-31C29 6.268 22.732 0 15 0z"/>
+            <circle fill="#fff" cx="15" cy="14" r="8"/>
+            <text x="15" y="18" text-anchor="middle" font-size="10" fill="#ff4757">🚨</text>
+          </svg>
+        `),
+        iconSize: [30, 46],
+        iconAnchor: [15, 46],
+        popupAnchor: [1, -40]
       });
       
-      console.log('✅ ICONES CREADES:', {
+      console.log('✅ ICONES ESTÀNDARD LEAFLET CREADES:', {
         userIcon: !!window.userIcon,
         currentUserIcon: !!window.currentUserIcon,
         incidentIcon: !!window.incidentIcon
@@ -318,6 +338,12 @@ const BikeGPSApp = () => {
       
     } catch (error) {
       console.error('❌ ERROR creant icones:', error);
+      
+      // ✅ FALLBACK: Usar icones per defecte de Leaflet si falla
+      console.log('🔄 Usant icones per defecte...');
+      window.userIcon = new L.Icon.Default();
+      window.currentUserIcon = new L.Icon.Default();
+      window.incidentIcon = new L.Icon.Default();
     }
   };
 
@@ -715,6 +741,16 @@ const BikeGPSApp = () => {
             `);
 
             console.log(`✅ MARKER D'INCIDÈNCIA CREAT per ${incident.userName}`);
+            
+            // ✅ DEBUG EXTRA: Verificar markers d'incidències
+            const incidentMarkers = [];
+            mapInstanceRef.current.eachLayer(layer => {
+              if (layer.options && layer.options.className === 'incident-marker') {
+                incidentMarkers.push(layer);
+              }
+            });
+            console.log(`📊 TOTAL MARKERS D'INCIDÈNCIES AL MAPA: ${incidentMarkers.length}`);
+            
           } catch (error) {
             console.error(`❌ ERROR creant marker d'incidència:`, error);
           }
