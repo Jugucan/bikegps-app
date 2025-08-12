@@ -1,177 +1,26 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 
-// Firebase real (substitueix mockFirebase)
-// import { auth, db } from './firebase'; // Descomenta quan tinguis Firebase configurat
-// import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
-// import { doc, getDoc, setDoc, collection, getDocs, addDoc, updateDoc, onSnapshot, query, where } from 'firebase/firestore';
+// Firebase REAL imports (descomenta't)
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, updateDoc, onSnapshot, query, where, serverTimestamp } from 'firebase/firestore';
 
-// Simulem Firebase per la demostració (ELIMINA AIXÒ quan tinguis Firebase real)
-const mockFirebase = {
-  auth: {
-    onAuthStateChanged: (callback) => {
-      // Simular usuari connectat després de 1 segon
-      setTimeout(() => {
-        callback({ uid: 's1UefGdgQphElib4KWmDsQj1uor2', email: 'test@example.com', displayName: 'Test User' });
-      }, 1000);
-      return () => {}; // unsubscribe function
-    },
-    signInWithEmailAndPassword: async (email, password) => {
-      return { user: { uid: 's1UefGdgQphElib4KWmDsQj1uor2', email, displayName: 'Test User' } };
-    },
-    createUserWithEmailAndPassword: async (email, password) => {
-      return { user: { uid: 's1UefGdgQphElib4KWmDsQj1uor2', email, displayName: 'Test User' } };
-    },
-    signOut: async () => {
-      console.log('📤 FIREBASE: signOut cridat');
-      // Simular signOut real - força el callback amb null
-      setTimeout(() => {
-        mockFirebase._authCallback?.(null);
-      }, 100);
-    },
-    _authCallback: null // Per guardar el callback i poder forçar logout
-  },
-  db: {
-    collection: (name) => ({
-      doc: (id) => ({
-        get: async () => {
-          if (name === 'users' && id === 's1UefGdgQphElib4KWmDsQj1uor2') {
-            return { 
-              exists: () => true,
-              data: () => ({ 
-                name: 'SuperAdmin User', 
-                isAdmin: true, 
-                isSuperAdmin: true,
-                email: 'test@example.com'
-              })
-            };
-          }
-          return { exists: () => false, data: () => null };
-        },
-        set: async (data) => {
-          console.log(`📝 FIREBASE: Guardant usuari ${id}:`, data);
-        },
-        update: async (data) => {
-          console.log(`📝 FIREBASE: Actualitzant usuari ${id}:`, data);
-        }
-      }),
-      get: async () => {
-        if (name === 'routes') {
-          // Combinar rutes mock amb rutes reals guardades
-          const mockRoutes = [
-            { id: '1', name: 'Ruta Test 1', description: 'Primera ruta de prova', coordinates: [[41.6722, 2.4540], [41.6730, 2.4550], [41.6740, 2.4560]], createdBy: 'mock' },
-            { id: '2', name: 'Ruta Test 2', description: 'Segona ruta de prova', coordinates: [[41.6700, 2.4500], [41.6710, 2.4510], [41.6720, 2.4520]], createdBy: 'mock' }
-          ];
-          
-          // Afegir rutes reals de localStorage
-          const realRoutes = JSON.parse(localStorage.getItem('bikeGPS_routes') || '[]');
-          const allRoutes = [...mockRoutes, ...realRoutes];
-          
-          return {
-            empty: false,
-            forEach: (callback) => {
-              allRoutes.forEach(route => callback({ id: route.id, data: () => route }));
-            }
-          };
-        }
-        return { empty: true, forEach: () => {} };
-      },
-      add: async (data) => {
-        console.log(`📝 FIREBASE: Afegint a ${name}:`, data);
-        
-        if (name === 'routes') {
-          // Guardar ruta real
-          const newRoute = {
-            ...data,
-            id: 'route_' + Date.now()
-          };
-          
-          const existingRoutes = JSON.parse(localStorage.getItem('bikeGPS_routes') || '[]');
-          existingRoutes.push(newRoute);
-          localStorage.setItem('bikeGPS_routes', JSON.stringify(existingRoutes));
-          
-          return { id: newRoute.id };
-        }
-        
-        if (name === 'incidents') {
-          // Guardar incidència real
-          const newIncident = {
-            ...data,
-            id: 'incident_' + Date.now()
-          };
-          
-          const existingIncidents = JSON.parse(localStorage.getItem('bikeGPS_incidents') || '[]');
-          existingIncidents.push(newIncident);
-          localStorage.setItem('bikeGPS_incidents', JSON.stringify(existingIncidents));
-          
-          return { id: newIncident.id };
-        }
-        
-        return { id: 'newId' };
-      },
-      onSnapshot: (callback) => {
-        // Simular dades en temps real
-        setTimeout(() => {
-          const mockData = {
-            empty: false,
-            forEach: (cb) => {
-              if (name === 'userLocations') {
-                const users = [
-                  { id: 's1UefGdgQphElib4KWmDsQj1uor2', data: () => ({ userName: 'Tu (SuperAdmin)', latitude: 41.6722, longitude: 2.4540, timestamp: { toDate: () => new Date() } }) },
-                  { id: 'user2', data: () => ({ userName: 'Maria Garcia', latitude: 41.6730, longitude: 2.4545, timestamp: { toDate: () => new Date() } }) },
-                  { id: 'admin1', data: () => ({ userName: 'Admin Joan', latitude: 41.6720, longitude: 2.4535, timestamp: { toDate: () => new Date() } }) }
-                ];
-                users.forEach(cb);
-              } else if (name === 'incidents') {
-                // Carregar incidències reals + mock
-                const realIncidents = JSON.parse(localStorage.getItem('bikeGPS_incidents') || '[]');
-                const mockIncidents = [
-                  { id: 'inc1', data: () => ({ userName: 'Pere Lopez', message: 'Punxada a la roda', location: { latitude: 41.6715, longitude: 2.4525 }, timestamp: { toDate: () => new Date() }, resolved: false }) }
-                ];
-                
-                const allIncidents = [...mockIncidents, ...realIncidents.map(inc => ({
-                  id: inc.id,
-                  data: () => inc
-                }))];
-                
-                allIncidents.forEach(cb);
-              }
-            }
-          };
-          callback(mockData);
-        }, 2000);
-        return () => {}; // unsubscribe
-      },
-      where: (field, operator, value) => ({
-        get: async () => {
-          if (name === 'users' && field === 'isAdmin') {
-            return {
-              empty: false,
-              forEach: (callback) => {
-                const adminUsers = [
-                  { id: 's1UefGdgQphElib4KWmDsQj1uor2', data: () => ({ name: 'SuperAdmin User', email: 'test@example.com', isAdmin: true, isSuperAdmin: true }) },
-                  { id: 'admin1', data: () => ({ name: 'Admin Joan', email: 'admin@example.com', isAdmin: true, isSuperAdmin: false }) }
-                ];
-                adminUsers.forEach(callback);
-              }
-            };
-          }
-          return { empty: true, forEach: () => {} };
-        }
-      })
-    }),
-    query: (collection, ...conditions) => collection
-  }
+// Firebase Configuration
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
-// Guardar callback per poder forçar logout
-mockFirebase.auth.onAuthStateChanged = (callback) => {
-  mockFirebase.auth._authCallback = callback;
-  setTimeout(() => {
-    callback({ uid: 's1UefGdgQphElib4KWmDsQj1uor2', email: 'test@example.com', displayName: 'SuperAdmin User' });
-  }, 1000);
-  return () => {};
-};
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2'; // El teu UID real
 
@@ -206,7 +55,7 @@ const BikeGPSApp = () => {
 
   // Initialize auth listener
   useEffect(() => {
-    const unsubscribe = mockFirebase.auth.onAuthStateChanged(async (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       console.log('🔐 AUTH STATE CHANGED:', user ? `Usuari connectat: ${user.uid}` : 'Usuari desconnectat');
       
       if (user) {
@@ -376,7 +225,8 @@ const BikeGPSApp = () => {
     try {
       console.log('👑 Verificant estat admin per:', user.uid);
       
-      const userDoc = await mockFirebase.db.collection('users').doc(user.uid).get();
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
       const userData = userDoc.exists() ? userDoc.data() : null;
       
       const isSuperAdminUser = user.uid === SUPER_ADMIN_UID;
@@ -386,7 +236,7 @@ const BikeGPSApp = () => {
         setIsAdmin(true);
         setIsSuperAdmin(true);
         if (!userData) {
-          await mockFirebase.db.collection('users').doc(user.uid).set({
+          await setDoc(userDocRef, {
             name: user.displayName || user.email,
             email: user.email,
             isAdmin: true,
@@ -399,7 +249,7 @@ const BikeGPSApp = () => {
         setIsSuperAdmin(userData.isSuperAdmin === true);
         console.log('👤 Usuari existent:', userData.isAdmin ? 'Admin' : 'User');
       } else {
-        await mockFirebase.db.collection('users').doc(user.uid).set({
+        await setDoc(userDocRef, {
           name: user.displayName || user.email,
           email: user.email,
           isAdmin: false,
@@ -424,7 +274,8 @@ const BikeGPSApp = () => {
     
     try {
       console.log('👥 Carregant tots els usuaris...');
-      const usersSnapshot = await mockFirebase.db.collection('users').where('isAdmin', '>=', false).get();
+      const usersQuery = query(collection(db, 'users'), where('isAdmin', '>=', false));
+      const usersSnapshot = await getDocs(usersQuery);
       const usersData = [];
       usersSnapshot.forEach((doc) => {
         usersData.push({ id: doc.id, ...doc.data() });
@@ -444,7 +295,8 @@ const BikeGPSApp = () => {
     }
     
     try {
-      await mockFirebase.db.collection('users').doc(userId).update({
+      const userDocRef = doc(db, 'users', userId);
+      await updateDoc(userDocRef, {
         isAdmin: makeAdmin
       });
       
@@ -500,7 +352,7 @@ const BikeGPSApp = () => {
     const email = formData.get('email');
     const password = formData.get('password');
     try {
-      await mockFirebase.auth.signInWithEmailAndPassword(email, password);
+      await signInWithEmailAndPassword(auth, email, password);
       showNotification('Login correcte!', 'success');
     } catch (error) {
       console.error('Error login:', error);
@@ -516,8 +368,9 @@ const BikeGPSApp = () => {
     const password = formData.get('password');
 
     try {
-      const userCredential = await mockFirebase.auth.createUserWithEmailAndPassword(email, password);
-      await mockFirebase.db.collection('users').doc(userCredential.user.uid).set({
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const userDocRef = doc(db, 'users', userCredential.user.uid);
+      await setDoc(userDocRef, {
         name: name,
         email: email,
         isAdmin: false
@@ -605,11 +458,11 @@ const BikeGPSApp = () => {
         createdBy: currentUser.uid,
         gpxFileName: gpxFile.name,
         pointsCount: coordinates.length,
-        createdAt: new Date()
+        createdAt: serverTimestamp()
       };
       
-      // Guardar ruta REAL
-      const docRef = await mockFirebase.db.collection('routes').add(routeData);
+      // Guardar ruta REAL a Firebase
+      const docRef = await addDoc(collection(db, 'routes'), routeData);
       console.log('✅ Ruta guardada amb ID:', docRef.id);
 
       setUploadProgress(100);
@@ -633,7 +486,7 @@ const BikeGPSApp = () => {
   const loadRoutes = async () => {
     try {
       console.log('📚 Carregant totes les rutes...');
-      const routesSnapshot = await mockFirebase.db.collection('routes').get();
+      const routesSnapshot = await getDocs(collection(db, 'routes'));
       const routesData = [];
       routesSnapshot.forEach((doc) => {
         routesData.push({ id: doc.id, ...doc.data() });
@@ -687,10 +540,12 @@ const BikeGPSApp = () => {
       try {
         console.log('🗑️ Eliminant ruta:', routeId);
         
-        // Eliminar de localStorage si és una ruta real
-        const existingRoutes = JSON.parse(localStorage.getItem('bikeGPS_routes') || '[]');
-        const updatedRoutes = existingRoutes.filter(route => route.id !== routeId);
-        localStorage.setItem('bikeGPS_routes', JSON.stringify(updatedRoutes));
+        // Aquest cop eliminem de Firebase real
+        const routeDocRef = doc(db, 'routes', routeId);
+        await updateDoc(routeDocRef, {
+          deleted: true,
+          deletedAt: serverTimestamp()
+        });
         
         showNotification('Ruta eliminada correctament', 'success');
         loadRoutes();
@@ -706,11 +561,11 @@ const BikeGPSApp = () => {
     }
   };
 
-  // Listener usuaris millorat
+  // Listener usuaris millorat amb Firebase real
   const listenToUsers = () => {
     console.log('👂 INICIANT LISTENER PER USUARIS...');
     
-    const unsubscribe = mockFirebase.db.collection('userLocations').onSnapshot(async (snapshot) => {
+    const unsubscribe = onSnapshot(collection(db, 'userLocations'), async (snapshot) => {
       console.log(`🔥 FIREBASE: Rebudes ubicacions d'usuaris`);
       
       const usersData = [];
@@ -811,11 +666,12 @@ const BikeGPSApp = () => {
     return unsubscribe;
   };
 
-  // Listener incidències millorat amb resolució REAL
+  // Listener incidències millorat amb Firebase real
   const listenToIncidents = () => {
     console.log('🚨 INICIANT LISTENER PER INCIDÈNCIES...');
     
-    const unsubscribe = mockFirebase.db.collection('incidents').onSnapshot((snapshot) => {
+    const incidentsQuery = query(collection(db, 'incidents'), where('resolved', '==', false));
+    const unsubscribe = onSnapshot(incidentsQuery, (snapshot) => {
       console.log(`🚨 FIREBASE: Rebudes incidències actives`);
       
       const incidentsData = [];
@@ -832,12 +688,6 @@ const BikeGPSApp = () => {
 
       snapshot.forEach((doc) => {
         const incident = { id: doc.id, ...doc.data() };
-        
-        // FILTRAR INCIDÈNCIES RESOLTES
-        if (incident.resolved) {
-          console.log(`✅ Incidència ${incident.id} ja resolta, saltant...`);
-          return;
-        }
         
         incidentsData.push(incident);
 
@@ -937,16 +787,41 @@ const BikeGPSApp = () => {
   
     console.log('📍 Iniciant seguiment de localització...');
     
-    // Simular seguiment d'ubicació
-    setTimeout(() => {
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 5000,
+      maximumAge: 0
+    };
+
+    const success = (position) => {
+      const { latitude, longitude } = position.coords;
+      console.log('📍 Nova posició rebuda:', latitude, longitude);
+      updateUserLocation(latitude, longitude);
+    };
+
+    const error = (err) => {
+      console.error('❌ Error geolocalització:', err);
+      // Fallback a posició simulada
       updateUserLocation(41.6722, 2.4540);
-    }, 2000);
+    };
+
+    watchIdRef.current = navigator.geolocation.watchPosition(success, error, options);
   };
 
   const updateUserLocation = async (lat, lng) => {
     if (!currentUser) return;
     try {
-      console.log('📍 Actualitzant ubicació:', lat, lng);
+      console.log('📍 Actualitzant ubicació a Firebase:', lat, lng);
+      
+      // Actualitzar ubicació a Firebase
+      const userLocationRef = doc(db, 'userLocations', currentUser.uid);
+      await setDoc(userLocationRef, {
+        userId: currentUser.uid,
+        userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
+        latitude: lat,
+        longitude: lng,
+        timestamp: serverTimestamp()
+      }, { merge: true });
       
       if (!hasSetInitialLocationRef.current && mapInstanceRef.current) {
         mapInstanceRef.current.setView([lat, lng], 15);
@@ -963,25 +838,46 @@ const BikeGPSApp = () => {
     try {
       console.log('🚨 Reportant incidència...');
       
-      // Obtenir ubicació actual (simulada)
-      const currentLocation = {
-        latitude: 41.6722 + (Math.random() - 0.5) * 0.01,
-        longitude: 2.4540 + (Math.random() - 0.5) * 0.01
-      };
-      
-      const incidentData = {
-        userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
-        message: message || 'Incidència reportada sense missatge',
-        location: currentLocation,
-        timestamp: { toDate: () => new Date() },
-        resolved: false,
-        reportedBy: currentUser.uid
-      };
-      
-      // Guardar incidència REAL
-      await mockFirebase.db.collection('incidents').add(incidentData);
-      
-      showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success');
+      // Obtenir ubicació actual real
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        const currentLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        };
+        
+        const incidentData = {
+          userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
+          message: message || 'Incidència reportada sense missatge',
+          location: currentLocation,
+          timestamp: serverTimestamp(),
+          resolved: false,
+          reportedBy: currentUser.uid
+        };
+        
+        // Guardar incidència REAL a Firebase
+        await addDoc(collection(db, 'incidents'), incidentData);
+        
+        showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success');
+      }, (error) => {
+        console.error('Error obtenint ubicació per incidència:', error);
+        // Fallback amb ubicació simulada
+        const fallbackLocation = {
+          latitude: 41.6722 + (Math.random() - 0.5) * 0.01,
+          longitude: 2.4540 + (Math.random() - 0.5) * 0.01
+        };
+        
+        const incidentData = {
+          userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
+          message: message || 'Incidència reportada sense missatge',
+          location: fallbackLocation,
+          timestamp: serverTimestamp(),
+          resolved: false,
+          reportedBy: currentUser.uid
+        };
+        
+        addDoc(collection(db, 'incidents'), incidentData);
+        showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success');
+      });
     } catch (error) {
       console.error('Error reporting incident:', error);
       showNotification('Error reportant incidència', 'error');
@@ -997,14 +893,13 @@ const BikeGPSApp = () => {
     try {
       console.log('✅ Resolent incidència:', incidentId);
       
-      // Marcar com a resolta a localStorage
-      const existingIncidents = JSON.parse(localStorage.getItem('bikeGPS_incidents') || '[]');
-      const updatedIncidents = existingIncidents.map(incident => 
-        incident.id === incidentId 
-          ? { ...incident, resolved: true, resolvedBy: currentUser.uid, resolvedAt: new Date() }
-          : incident
-      );
-      localStorage.setItem('bikeGPS_incidents', JSON.stringify(updatedIncidents));
+      // Marcar com a resolta a Firebase
+      const incidentDocRef = doc(db, 'incidents', incidentId);
+      await updateDoc(incidentDocRef, {
+        resolved: true,
+        resolvedBy: currentUser.uid,
+        resolvedAt: serverTimestamp()
+      });
       
       // Eliminar marker del mapa immediatament
       if (incidentMarkersRef.current[incidentId]) {
@@ -1044,7 +939,7 @@ const BikeGPSApp = () => {
       setIsReturning(false);
       
       // CRIDAR FIREBASE LOGOUT REAL
-      await mockFirebase.auth.signOut();
+      await signOut(auth);
       console.log('✅ Firebase signOut cridat');
       
       showNotification('Sessió tancada correctament', 'success');
@@ -1794,3 +1689,4 @@ const BikeGPSApp = () => {
 };
 
 export default BikeGPSApp;
+
