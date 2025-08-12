@@ -273,8 +273,7 @@ const BikeGPSApp = () => {
     
     try {
       console.log('👥 Carregant tots els usuaris...');
-      const usersQuery = query(collection(db, 'users'), where('isAdmin', '>=', false));
-      const usersSnapshot = await getDocs(usersQuery);
+      const usersSnapshot = await getDocs(collection(db, 'users'));
       const usersData = [];
       usersSnapshot.forEach((doc) => {
         usersData.push({ id: doc.id, ...doc.data() });
@@ -381,7 +380,7 @@ const BikeGPSApp = () => {
     }
   };
 
-  // Processament GPX real
+  // CORRECCIÓ: Processament GPX - convertir a format pla per Firebase
   const parseGPX = (gpxText) => {
     try {
       const parser = new DOMParser();
@@ -398,7 +397,11 @@ const BikeGPSApp = () => {
         const lat = parseFloat(point.getAttribute('lat'));
         const lon = parseFloat(point.getAttribute('lon'));
         if (!isNaN(lat) && !isNaN(lon)) {
-          coordinates.push([lat, lon]);
+          // CORRECCIÓ: Guardar com objectes en lloc de arrays per evitar nested arrays
+          coordinates.push({
+            lat: lat,
+            lng: lon
+          });
         }
       });
       
@@ -408,7 +411,10 @@ const BikeGPSApp = () => {
           const lat = parseFloat(point.getAttribute('lat'));
           const lon = parseFloat(point.getAttribute('lon'));
           if (!isNaN(lat) && !isNaN(lon)) {
-            coordinates.push([lat, lon]);
+            coordinates.push({
+              lat: lat,
+              lng: lon
+            });
           }
         });
       }
@@ -453,7 +459,7 @@ const BikeGPSApp = () => {
       const routeData = {
         name: name,
         description: description,
-        coordinates: coordinates,
+        coordinates: coordinates, // Ara són objectes {lat, lng} en lloc de nested arrays
         createdBy: currentUser.uid,
         gpxFileName: gpxFile.name,
         pointsCount: coordinates.length,
@@ -485,7 +491,9 @@ const BikeGPSApp = () => {
   const loadRoutes = async () => {
     try {
       console.log('📚 Carregant totes les rutes...');
-      const routesSnapshot = await getDocs(collection(db, 'routes'));
+      // CORRECCIÓ: Filtrar rutes no eliminades
+      const routesQuery = query(collection(db, 'routes'), where('deleted', '!=', true));
+      const routesSnapshot = await getDocs(routesQuery);
       const routesData = [];
       routesSnapshot.forEach((doc) => {
         routesData.push({ id: doc.id, ...doc.data() });
@@ -505,11 +513,17 @@ const BikeGPSApp = () => {
     if (mapInstanceRef.current && routeData.coordinates) {
       clearRoutePolylines();
 
+      // CORRECCIÓ: Gestionar tant format nou com antic
       let leafletCoords;
-      if (Array.isArray(routeData.coordinates[0])) {
+      if (routeData.coordinates[0] && typeof routeData.coordinates[0] === 'object' && 'lat' in routeData.coordinates[0]) {
+        // Format nou: {lat, lng}
+        leafletCoords = routeData.coordinates.map(coord => [coord.lat, coord.lng]);
+      } else if (Array.isArray(routeData.coordinates[0])) {
+        // Format antic: [lat, lng]
         leafletCoords = routeData.coordinates;
       } else {
-        leafletCoords = routeData.coordinates.map(coord => [coord.lat, coord.lng]);
+        console.error('Format de coordenades no reconegut:', routeData.coordinates[0]);
+        return;
       }
       
       const pendingRoute = L.polyline(leafletCoords, {
@@ -518,8 +532,22 @@ const BikeGPSApp = () => {
         opacity: 0.8,
         dashArray: '20, 15'
       }).addTo(mapInstanceRef.current);
+      
       routePolylinesRef.current.push(pendingRoute);
-      mapInstanceRef.current.fitBounds(pendingRoute.getBounds());
+      
+      // CORRECCIÓ: Orientar el mapa cap al nord amb la ruta centrada
+      const bounds = pendingRoute.getBounds();
+      mapInstanceRef.current.fitBounds(bounds);
+      
+      // Establir orientació nord després de fitBounds
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          const center = bounds.getCenter();
+          mapInstanceRef.current.setView(center, mapInstanceRef.current.getZoom(), {
+            animate: true
+          });
+        }
+      }, 100);
     }
 
     showNotification('Ruta seleccionada: ' + routeData.name, 'success');
@@ -539,7 +567,7 @@ const BikeGPSApp = () => {
       try {
         console.log('🗑️ Eliminant ruta:', routeId);
         
-        // Aquest cop eliminem de Firebase real
+        // Marcar com eliminada en lloc d'eliminar
         const routeDocRef = doc(db, 'routes', routeId);
         await updateDoc(routeDocRef, {
           deleted: true,
@@ -560,121 +588,131 @@ const BikeGPSApp = () => {
     }
   };
 
-  // Listener usuaris millorat amb Firebase real
+  // CORRECCIÓ: Listener usuaris millorat
   const listenToUsers = () => {
     console.log('👂 INICIANT LISTENER PER USUARIS...');
     
     const unsubscribe = onSnapshot(collection(db, 'userLocations'), async (snapshot) => {
-      console.log(`🔥 FIREBASE: Rebudes ubicacions d'usuaris`);
+      console.log(`🔥 FIREBASE: Rebudes ${snapshot.docs.length} ubicacions d'usuaris`);
       
       const usersData = [];
       
-      snapshot.forEach(async (docSnapshot) => {
+      for (const docSnapshot of snapshot.docs) {
         const location = docSnapshot.data();
         const userId = docSnapshot.id;
         const isCurrentUser = userId === currentUser?.uid;
         
-        // Comprovar si és admin
-        const userIsAdmin = userId === 'admin1' || userId === currentUser?.uid;
-        
-        console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'}${userIsAdmin ? ' - ADMIN' : ''})`, {
-          lat: location.latitude,
-          lng: location.longitude,
-          timestamp: location.timestamp?.toDate?.()?.toLocaleTimeString() || 'No timestamp'
-        });
-
-        const addMarkerWhenReady = () => {
-          if (!mapInstanceRef.current) {
-            console.log(`⏳ Mapa no llest, reintentant en 500ms per ${location.userName}...`);
-            setTimeout(addMarkerWhenReady, 500);
-            return;
-          }
-
-          if (userMarkersRef.current[userId]) {
-            console.log(`🗑️ Eliminant marker anterior per ${location.userName}`);
-            if (mapInstanceRef.current.hasLayer(userMarkersRef.current[userId])) {
-              mapInstanceRef.current.removeLayer(userMarkersRef.current[userId]);
-            }
-            delete userMarkersRef.current[userId];
-          }
-
-          if (!window.userIcon || !window.currentUserIcon) {
-            console.log('🎨 Creant icones perquè no existeixen...');
-            createCustomIcons();
-          }
+        try {
+          // Obtenir info admin des del document users
+          const userDocRef = doc(db, 'users', userId);
+          const userDoc = await getDoc(userDocRef);
+          const userData = userDoc.exists() ? userDoc.data() : null;
+          const userIsAdmin = userData?.isAdmin === true || userId === SUPER_ADMIN_UID;
           
-          const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
-          
-          console.log(`🎯 Creant marker per ${location.userName} amb icona:`, icon ? 'OK' : 'ERROR', userIsAdmin ? '(ADMIN)' : '(USER)');
-          
-          try {
-            const marker = L.marker([location.latitude, location.longitude], {
-              icon: icon
-            }).addTo(mapInstanceRef.current);
-            
-            userMarkersRef.current[userId] = marker;
+          console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'}${userIsAdmin ? ' - ADMIN' : ''})`, {
+            lat: location.latitude,
+            lng: location.longitude,
+            timestamp: location.timestamp?.toDate?.()?.toLocaleTimeString() || 'No timestamp'
+          });
 
-            const userTypeLabel = isCurrentUser 
-              ? (userIsAdmin ? '👑 Tu (Admin)' : '📍 Tu') 
-              : (userIsAdmin ? '👑 ' + location.userName + ' (Admin)' : '👤 ' + location.userName);
-            
-            const userTypeColor = isCurrentUser 
-              ? (userIsAdmin ? '#3742fa' : '#2ed573')
-              : (userIsAdmin ? '#3742fa' : '#ffd02e');
-
-            marker.bindPopup(`
-              <div style="text-align: center; padding: 0.5rem;">
-                <strong style="color: ${userTypeColor};">
-                  ${userTypeLabel}
-                </strong><br>
-                ${userIsAdmin ? '<small style="color: #3742fa; font-weight: bold;">ADMINISTRADOR</small><br>' : ''}
-                <small style="color: #666;">
-                  Última actualització:<br>
-                  ${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
-                </small>
-              </div>
-            `);
-            
-            console.log(`✅ MARKER CREAT CORRECTAMENT per ${location.userName} ${userIsAdmin ? '(ADMIN)' : '(USER)'}`);
-            
-          } catch (error) {
-            console.error(`❌ ERROR creant marker per ${location.userName}:`, error);
-          }
-        };
-
-        addMarkerWhenReady();
-
-        if (isAdmin) {
-          usersData.push({
+          // Afegir a la llista d'usuaris actius
+          const userEntry = {
             ...location,
             id: userId,
             isCurrentUser,
             isAdmin: userIsAdmin,
             online: isUserOnline(location.timestamp)
-          });
-        }
-      });
+          };
+          usersData.push(userEntry);
 
-      if (isAdmin) {
-        setUsers(usersData);
-        console.log(`👑 ADMIN: Llista usuaris actualitzada amb ${usersData.length} usuaris`);
+          // Gestionar markers al mapa
+          const addMarkerWhenReady = () => {
+            if (!mapInstanceRef.current) {
+              console.log(`⏳ Mapa no llest, reintentant en 500ms per ${location.userName}...`);
+              setTimeout(addMarkerWhenReady, 500);
+              return;
+            }
+
+            // Eliminar marker anterior si existeix
+            if (userMarkersRef.current[userId]) {
+              console.log(`🗑️ Eliminant marker anterior per ${location.userName}`);
+              if (mapInstanceRef.current.hasLayer(userMarkersRef.current[userId])) {
+                mapInstanceRef.current.removeLayer(userMarkersRef.current[userId]);
+              }
+              delete userMarkersRef.current[userId];
+            }
+
+            if (!window.userIcon || !window.currentUserIcon) {
+              console.log('🎨 Creant icones perquè no existeixen...');
+              createCustomIcons();
+            }
+            
+            const icon = isCurrentUser ? window.currentUserIcon : window.userIcon;
+            
+            console.log(`🎯 Creant marker per ${location.userName} amb icona:`, icon ? 'OK' : 'ERROR', userIsAdmin ? '(ADMIN)' : '(USER)');
+            
+            try {
+              const marker = L.marker([location.latitude, location.longitude], {
+                icon: icon
+              }).addTo(mapInstanceRef.current);
+              
+              userMarkersRef.current[userId] = marker;
+
+              const userTypeLabel = isCurrentUser 
+                ? (userIsAdmin ? '👑 Tu (Admin)' : '📍 Tu') 
+                : (userIsAdmin ? '👑 ' + location.userName + ' (Admin)' : '👤 ' + location.userName);
+              
+              const userTypeColor = isCurrentUser 
+                ? (userIsAdmin ? '#3742fa' : '#2ed573')
+                : (userIsAdmin ? '#3742fa' : '#ffd02e');
+
+              marker.bindPopup(`
+                <div style="text-align: center; padding: 0.5rem;">
+                  <strong style="color: ${userTypeColor};">
+                    ${userTypeLabel}
+                  </strong><br>
+                  ${userIsAdmin ? '<small style="color: #3742fa; font-weight: bold;">ADMINISTRADOR</small><br>' : ''}
+                  <small style="color: #666;">
+                    Última actualització:<br>
+                    ${location.timestamp ? new Date(location.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
+                  </small>
+                </div>
+              `);
+              
+              console.log(`✅ MARKER CREAT CORRECTAMENT per ${location.userName} ${userIsAdmin ? '(ADMIN)' : '(USER)'}`);
+              
+            } catch (error) {
+              console.error(`❌ ERROR creant marker per ${location.userName}:`, error);
+            }
+          };
+
+          addMarkerWhenReady();
+
+        } catch (error) {
+          console.error(`Error processant usuari ${userId}:`, error);
+        }
       }
+
+      // CORRECCIÓ: Actualitzar sempre la llista d'usuaris
+      setUsers(usersData);
+      console.log(`👑 Llista usuaris actualitzada amb ${usersData.length} usuaris`);
       
     });
 
     return unsubscribe;
   };
 
-  // Listener incidències millorat amb Firebase real
+  // CORRECCIÓ: Listener incidències millorat
   const listenToIncidents = () => {
     console.log('🚨 INICIANT LISTENER PER INCIDÈNCIES...');
     
     const incidentsQuery = query(collection(db, 'incidents'), where('resolved', '==', false));
     const unsubscribe = onSnapshot(incidentsQuery, (snapshot) => {
-      console.log(`🚨 FIREBASE: Rebudes incidències actives`);
+      console.log(`🚨 FIREBASE: Rebudes ${snapshot.docs.length} incidències actives`);
       
       const incidentsData = [];
       
+      // Netejar markers d'incidències existents
       console.log('🧹 Netejant markers d\'incidències existents...');
       Object.keys(incidentMarkersRef.current).forEach(incidentId => {
         const marker = incidentMarkersRef.current[incidentId];
@@ -774,7 +812,7 @@ const BikeGPSApp = () => {
     if (!timestamp) return false;
     const now = new Date();
     const lastUpdate = timestamp.toDate();
-    return (now - lastUpdate) < 300000;
+    return (now - lastUpdate) < 300000; // 5 minuts
   };
 
   const startLocationTracking = () => {
@@ -788,8 +826,8 @@ const BikeGPSApp = () => {
     
     const options = {
       enableHighAccuracy: true,
-      timeout: 5000,
-      maximumAge: 0
+      timeout: 10000,
+      maximumAge: 30000
     };
 
     const success = (position) => {
@@ -800,10 +838,13 @@ const BikeGPSApp = () => {
 
     const error = (err) => {
       console.error('❌ Error geolocalització:', err);
-      // Fallback a posició simulada
-      updateUserLocation(41.6722, 2.4540);
+      showNotification('Error obtenint ubicació: ' + err.message, 'error');
     };
 
+    // Obtenir ubicació inicial immediatament
+    navigator.geolocation.getCurrentPosition(success, error, options);
+    
+    // Després iniciar el seguiment continu
     watchIdRef.current = navigator.geolocation.watchPosition(success, error, options);
   };
 
@@ -831,11 +872,18 @@ const BikeGPSApp = () => {
     }
   };
 
+  // CORRECCIÓ: Millor gestió de la creació d'incidències
   const reportIncident = async () => {
     const message = prompt('Descriu la incidència (opcional):');
     
     try {
       console.log('🚨 Reportant incidència...');
+      
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000
+      };
       
       // Obtenir ubicació actual real
       navigator.geolocation.getCurrentPosition(async (position) => {
@@ -853,30 +901,56 @@ const BikeGPSApp = () => {
           reportedBy: currentUser.uid
         };
         
+        console.log('💾 Guardant incidència a Firebase:', incidentData);
+        
         // Guardar incidència REAL a Firebase
         await addDoc(collection(db, 'incidents'), incidentData);
         
         showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success');
-      }, (error) => {
+        
+      }, async (error) => {
         console.error('Error obtenint ubicació per incidència:', error);
-        // Fallback amb ubicació simulada
-        const fallbackLocation = {
-          latitude: 41.6722 + (Math.random() - 0.5) * 0.01,
-          longitude: 2.4540 + (Math.random() - 0.5) * 0.01
-        };
+        showNotification('Error obtenint ubicació per a la incidència', 'error');
         
-        const incidentData = {
-          userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
-          message: message || 'Incidència reportada sense missatge',
-          location: fallbackLocation,
-          timestamp: serverTimestamp(),
-          resolved: false,
-          reportedBy: currentUser.uid
-        };
-        
-        addDoc(collection(db, 'incidents'), incidentData);
-        showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success');
-      });
+        // Si no podem obtenir la ubicació actual, utilitzar l'última coneguda
+        if (currentUser) {
+          try {
+            const userLocationRef = doc(db, 'userLocations', currentUser.uid);
+            const userLocationDoc = await getDoc(userLocationRef);
+            
+            let fallbackLocation;
+            if (userLocationDoc.exists()) {
+              const data = userLocationDoc.data();
+              fallbackLocation = {
+                latitude: data.latitude,
+                longitude: data.longitude
+              };
+            } else {
+              // Última opció: ubicació per defecte
+              fallbackLocation = {
+                latitude: 41.6722,
+                longitude: 2.4540
+              };
+            }
+            
+            const incidentData = {
+              userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
+              message: (message || 'Incidència reportada sense missatge') + ' (ubicació aproximada)',
+              location: fallbackLocation,
+              timestamp: serverTimestamp(),
+              resolved: false,
+              reportedBy: currentUser.uid
+            };
+            
+            await addDoc(collection(db, 'incidents'), incidentData);
+            showNotification('🚨 Incidència reportada amb ubicació aproximada!', 'success');
+            
+          } catch (fallbackError) {
+            console.error('Error reportant incidència amb fallback:', fallbackError);
+            showNotification('Error reportant incidència', 'error');
+          }
+        }
+      }, options);
     } catch (error) {
       console.error('Error reporting incident:', error);
       showNotification('Error reportant incidència', 'error');
@@ -1378,11 +1452,11 @@ const BikeGPSApp = () => {
               boxShadow: '8px 8px 16px #d1d1d4, -8px -8px 16px #ffffff'
             }}>
               <h3 className="text-lg font-bold mb-4 pb-2 border-b-2 border-yellow-400">
-                Participants Actius
+                Participants Actius ({users.length})
               </h3>
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {users.length === 0 ? (
-                  <p className="text-gray-500 text-center py-4">Carregant participants...</p>
+                  <p className="text-gray-500 text-center py-4">No hi ha participants connectats</p>
                 ) : (
                   users.map((user) => (
                     <div key={user.id} className="flex items-center justify-between p-3 rounded-lg" style={{
@@ -1564,6 +1638,41 @@ const BikeGPSApp = () => {
             </div>
           </div>
 
+          {/* Participants Panel for Users */}
+          <div className="p-6 rounded-2xl sticky top-96 mb-6" style={{
+            background: '#f0f0f3',
+            boxShadow: '8px 8px 16px #d1d1d4, -8px -8px 16px #ffffff'
+          }}>
+            <h3 className="text-lg font-bold mb-4 pb-2 border-b-2 border-green-400">
+              👥 Participants ({users.length})
+            </h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {users.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No hi ha participants connectats</p>
+              ) : (
+                users.map((user) => (
+                  <div key={user.id} className="flex items-center justify-between p-3 rounded-lg" style={{
+                    background: '#f0f0f3',
+                    boxShadow: '4px 4px 8px #d1d1d4, -4px -4px 8px #ffffff'
+                  }}>
+                    <div>
+                      <strong className="text-gray-800 text-sm">
+                        {user.isAdmin ? '👑 ' : '👤 '}{user.userName} 
+                        {user.isCurrentUser && ' (Tu)'}
+                      </strong>
+                      <div className="text-gray-500 text-xs">
+                        {user.timestamp ? new Date(user.timestamp.toDate()).toLocaleTimeString() : 'Ara'}
+                      </div>
+                    </div>
+                    <div className={`w-2 h-2 rounded-full ${user.online ? 'bg-green-500' : 'bg-red-500'}`} style={{
+                      boxShadow: user.online ? '0 0 6px rgba(46, 213, 115, 0.5)' : '0 0 6px rgba(255, 107, 107, 0.5)'
+                    }}></div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Incidents Panel for Users */}
           {incidents.length > 0 && (
             <div className="p-6 rounded-2xl sticky top-96" style={{
@@ -1688,4 +1797,3 @@ const BikeGPSApp = () => {
 };
 
 export default BikeGPSApp;
-
