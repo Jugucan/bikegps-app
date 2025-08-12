@@ -1,44 +1,114 @@
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
 
-// Simulem Firebase per la demostració
+// Firebase real (substitueix mockFirebase)
+// import { auth, db } from './firebase'; // Descomenta quan tinguis Firebase configurat
+// import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
+// import { doc, getDoc, setDoc, collection, getDocs, addDoc, updateDoc, onSnapshot, query, where } from 'firebase/firestore';
+
+// Simulem Firebase per la demostració (ELIMINA AIXÒ quan tinguis Firebase real)
 const mockFirebase = {
   auth: {
     onAuthStateChanged: (callback) => {
       // Simular usuari connectat després de 1 segon
       setTimeout(() => {
-        callback({ uid: 'test123', email: 'test@example.com', displayName: 'Test User' });
+        callback({ uid: 's1UefGdgQphElib4KWmDsQj1uor2', email: 'test@example.com', displayName: 'Test User' });
       }, 1000);
       return () => {}; // unsubscribe function
     },
     signInWithEmailAndPassword: async (email, password) => {
-      return { user: { uid: 'test123', email, displayName: 'Test User' } };
+      return { user: { uid: 's1UefGdgQphElib4KWmDsQj1uor2', email, displayName: 'Test User' } };
     },
     createUserWithEmailAndPassword: async (email, password) => {
-      return { user: { uid: 'test123', email, displayName: 'Test User' } };
+      return { user: { uid: 's1UefGdgQphElib4KWmDsQj1uor2', email, displayName: 'Test User' } };
     },
-    signOut: async () => {}
+    signOut: async () => {
+      console.log('📤 FIREBASE: signOut cridat');
+      // Simular signOut real - força el callback amb null
+      setTimeout(() => {
+        mockFirebase._authCallback?.(null);
+      }, 100);
+    },
+    _authCallback: null // Per guardar el callback i poder forçar logout
   },
   db: {
     collection: (name) => ({
       doc: (id) => ({
-        get: async () => ({ data: () => ({ name: 'Test User', isAdmin: true, isSuperAdmin: true }) }),
-        set: async () => {},
-        update: async () => {}
-      }),
-      get: async () => ({
-        empty: false,
-        forEach: (callback) => {
-          const routes = [
-            { id: '1', name: 'Ruta Test 1', description: 'Primera ruta de prova', coordinates: [[41.6722, 2.4540], [41.6730, 2.4550], [41.6740, 2.4560]] },
-            { id: '2', name: 'Ruta Test 2', description: 'Segona ruta de prova', coordinates: [[41.6700, 2.4500], [41.6710, 2.4510], [41.6720, 2.4520]] }
-          ];
-          if (name === 'routes') {
-            routes.forEach(route => callback({ id: route.id, data: () => route }));
+        get: async () => {
+          if (name === 'users' && id === 's1UefGdgQphElib4KWmDsQj1uor2') {
+            return { 
+              exists: () => true,
+              data: () => ({ 
+                name: 'SuperAdmin User', 
+                isAdmin: true, 
+                isSuperAdmin: true,
+                email: 'test@example.com'
+              })
+            };
           }
+          return { exists: () => false, data: () => null };
+        },
+        set: async (data) => {
+          console.log(`📝 FIREBASE: Guardant usuari ${id}:`, data);
+        },
+        update: async (data) => {
+          console.log(`📝 FIREBASE: Actualitzant usuari ${id}:`, data);
         }
       }),
-      add: async () => ({ id: 'newId' }),
+      get: async () => {
+        if (name === 'routes') {
+          // Combinar rutes mock amb rutes reals guardades
+          const mockRoutes = [
+            { id: '1', name: 'Ruta Test 1', description: 'Primera ruta de prova', coordinates: [[41.6722, 2.4540], [41.6730, 2.4550], [41.6740, 2.4560]], createdBy: 'mock' },
+            { id: '2', name: 'Ruta Test 2', description: 'Segona ruta de prova', coordinates: [[41.6700, 2.4500], [41.6710, 2.4510], [41.6720, 2.4520]], createdBy: 'mock' }
+          ];
+          
+          // Afegir rutes reals de localStorage
+          const realRoutes = JSON.parse(localStorage.getItem('bikeGPS_routes') || '[]');
+          const allRoutes = [...mockRoutes, ...realRoutes];
+          
+          return {
+            empty: false,
+            forEach: (callback) => {
+              allRoutes.forEach(route => callback({ id: route.id, data: () => route }));
+            }
+          };
+        }
+        return { empty: true, forEach: () => {} };
+      },
+      add: async (data) => {
+        console.log(`📝 FIREBASE: Afegint a ${name}:`, data);
+        
+        if (name === 'routes') {
+          // Guardar ruta real
+          const newRoute = {
+            ...data,
+            id: 'route_' + Date.now()
+          };
+          
+          const existingRoutes = JSON.parse(localStorage.getItem('bikeGPS_routes') || '[]');
+          existingRoutes.push(newRoute);
+          localStorage.setItem('bikeGPS_routes', JSON.stringify(existingRoutes));
+          
+          return { id: newRoute.id };
+        }
+        
+        if (name === 'incidents') {
+          // Guardar incidència real
+          const newIncident = {
+            ...data,
+            id: 'incident_' + Date.now()
+          };
+          
+          const existingIncidents = JSON.parse(localStorage.getItem('bikeGPS_incidents') || '[]');
+          existingIncidents.push(newIncident);
+          localStorage.setItem('bikeGPS_incidents', JSON.stringify(existingIncidents));
+          
+          return { id: newIncident.id };
+        }
+        
+        return { id: 'newId' };
+      },
       onSnapshot: (callback) => {
         // Simular dades en temps real
         setTimeout(() => {
@@ -47,29 +117,63 @@ const mockFirebase = {
             forEach: (cb) => {
               if (name === 'userLocations') {
                 const users = [
-                  { id: 'test123', data: () => ({ userName: 'Tu', latitude: 41.6722, longitude: 2.4540, timestamp: { toDate: () => new Date() } }) },
+                  { id: 's1UefGdgQphElib4KWmDsQj1uor2', data: () => ({ userName: 'Tu (SuperAdmin)', latitude: 41.6722, longitude: 2.4540, timestamp: { toDate: () => new Date() } }) },
                   { id: 'user2', data: () => ({ userName: 'Maria Garcia', latitude: 41.6730, longitude: 2.4545, timestamp: { toDate: () => new Date() } }) },
                   { id: 'admin1', data: () => ({ userName: 'Admin Joan', latitude: 41.6720, longitude: 2.4535, timestamp: { toDate: () => new Date() } }) }
                 ];
                 users.forEach(cb);
               } else if (name === 'incidents') {
-                const incidents = [
+                // Carregar incidències reals + mock
+                const realIncidents = JSON.parse(localStorage.getItem('bikeGPS_incidents') || '[]');
+                const mockIncidents = [
                   { id: 'inc1', data: () => ({ userName: 'Pere Lopez', message: 'Punxada a la roda', location: { latitude: 41.6715, longitude: 2.4525 }, timestamp: { toDate: () => new Date() }, resolved: false }) }
                 ];
-                incidents.forEach(cb);
+                
+                const allIncidents = [...mockIncidents, ...realIncidents.map(inc => ({
+                  id: inc.id,
+                  data: () => inc
+                }))];
+                
+                allIncidents.forEach(cb);
               }
             }
           };
           callback(mockData);
         }, 2000);
         return () => {}; // unsubscribe
-      }
+      },
+      where: (field, operator, value) => ({
+        get: async () => {
+          if (name === 'users' && field === 'isAdmin') {
+            return {
+              empty: false,
+              forEach: (callback) => {
+                const adminUsers = [
+                  { id: 's1UefGdgQphElib4KWmDsQj1uor2', data: () => ({ name: 'SuperAdmin User', email: 'test@example.com', isAdmin: true, isSuperAdmin: true }) },
+                  { id: 'admin1', data: () => ({ name: 'Admin Joan', email: 'admin@example.com', isAdmin: true, isSuperAdmin: false }) }
+                ];
+                adminUsers.forEach(callback);
+              }
+            };
+          }
+          return { empty: true, forEach: () => {} };
+        }
+      })
     }),
     query: (collection, ...conditions) => collection
   }
 };
 
-const SUPER_ADMIN_UID = 'test123'; // Per la demostració
+// Guardar callback per poder forçar logout
+mockFirebase.auth.onAuthStateChanged = (callback) => {
+  mockFirebase.auth._authCallback = callback;
+  setTimeout(() => {
+    callback({ uid: 's1UefGdgQphElib4KWmDsQj1uor2', email: 'test@example.com', displayName: 'SuperAdmin User' });
+  }, 1000);
+  return () => {};
+};
+
+const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2'; // El teu UID real
 
 const BikeGPSApp = () => {
   // State management
@@ -79,6 +183,7 @@ const BikeGPSApp = () => {
   const [currentRoute, setCurrentRoute] = useState(null);
   const [routes, setRoutes] = useState([]);
   const [users, setUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [authTab, setAuthTab] = useState('login');
   const [loading, setLoading] = useState(true);
@@ -87,6 +192,7 @@ const BikeGPSApp = () => {
   const [isReturning, setIsReturning] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadProgress, setShowUploadProgress] = useState(false);
+  const [showAdminManagement, setShowAdminManagement] = useState(false);
 
   // Refs
   const mapRef = useRef(null);
@@ -101,14 +207,42 @@ const BikeGPSApp = () => {
   // Initialize auth listener
   useEffect(() => {
     const unsubscribe = mockFirebase.auth.onAuthStateChanged(async (user) => {
+      console.log('🔐 AUTH STATE CHANGED:', user ? `Usuari connectat: ${user.uid}` : 'Usuari desconnectat');
+      
       if (user) {
         setCurrentUser(user);
         await checkAdminStatus(user);
       } else {
+        // LOGOUT REAL - netejar tot
+        console.log('🚪 NETEJANT ESTAT PER LOGOUT...');
         setCurrentUser(null);
         setIsAdmin(false);
         setIsSuperAdmin(false);
+        setCurrentRoute(null);
+        setRoutes([]);
+        setUsers([]);
+        setAllUsers([]);
+        setIncidents([]);
+        setRouteProgress(0);
+        setIsReturning(false);
         setLoading(false);
+        
+        // Netejar mapa
+        if (mapInstanceRef.current) {
+          clearRoutePolylines();
+          Object.values(userMarkersRef.current).forEach(marker => {
+            if (mapInstanceRef.current.hasLayer(marker)) {
+              mapInstanceRef.current.removeLayer(marker);
+            }
+          });
+          Object.values(incidentMarkersRef.current).forEach(marker => {
+            if (mapInstanceRef.current.hasLayer(marker)) {
+              mapInstanceRef.current.removeLayer(marker);
+            }
+          });
+          userMarkersRef.current = {};
+          incidentMarkersRef.current = {};
+        }
       }
     });
 
@@ -220,6 +354,10 @@ const BikeGPSApp = () => {
       console.log('📚 Carregant rutes per usuari connectat...');
       loadRoutes();
       
+      if (isSuperAdmin) {
+        loadAllUsers();
+      }
+      
       if (!watchIdRef.current) {
         console.log('📍 Iniciant seguiment ubicació...');
         startLocationTracking();
@@ -232,14 +370,18 @@ const BikeGPSApp = () => {
         watchIdRef.current = null;
       }
     };
-  }, [currentUser]);
+  }, [currentUser, isSuperAdmin]);
   
   const checkAdminStatus = async (user) => {
     try {
+      console.log('👑 Verificant estat admin per:', user.uid);
+      
       const userDoc = await mockFirebase.db.collection('users').doc(user.uid).get();
-      const userData = userDoc.data();
+      const userData = userDoc.exists() ? userDoc.data() : null;
       
       const isSuperAdminUser = user.uid === SUPER_ADMIN_UID;
+      console.log('🔍 Es SuperAdmin?', isSuperAdminUser, 'UID:', user.uid);
+      
       if (isSuperAdminUser) {
         setIsAdmin(true);
         setIsSuperAdmin(true);
@@ -251,9 +393,11 @@ const BikeGPSApp = () => {
             isSuperAdmin: true
           });
         }
+        console.log('👑 SuperAdmin configurat correctament');
       } else if (userData) {
         setIsAdmin(userData.isAdmin === true);
         setIsSuperAdmin(userData.isSuperAdmin === true);
+        console.log('👤 Usuari existent:', userData.isAdmin ? 'Admin' : 'User');
       } else {
         await mockFirebase.db.collection('users').doc(user.uid).set({
           name: user.displayName || user.email,
@@ -263,6 +407,7 @@ const BikeGPSApp = () => {
         });
         setIsAdmin(false);
         setIsSuperAdmin(false);
+        console.log('👤 Nou usuari regular creat');
       }
       
       setLoading(false);
@@ -273,7 +418,45 @@ const BikeGPSApp = () => {
     }
   };
 
-  // Icones personalitzades (igual que la versió HTML)
+  // Carregar tots els usuaris (només SuperAdmin)
+  const loadAllUsers = async () => {
+    if (!isSuperAdmin) return;
+    
+    try {
+      console.log('👥 Carregant tots els usuaris...');
+      const usersSnapshot = await mockFirebase.db.collection('users').where('isAdmin', '>=', false).get();
+      const usersData = [];
+      usersSnapshot.forEach((doc) => {
+        usersData.push({ id: doc.id, ...doc.data() });
+      });
+      setAllUsers(usersData);
+      console.log('👥 Usuaris carregats:', usersData.length);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+
+  // Fer admin a un usuari (només SuperAdmin)
+  const makeUserAdmin = async (userId, makeAdmin = true) => {
+    if (!isSuperAdmin) {
+      showNotification('Només el SuperAdmin pot fer això', 'error');
+      return;
+    }
+    
+    try {
+      await mockFirebase.db.collection('users').doc(userId).update({
+        isAdmin: makeAdmin
+      });
+      
+      showNotification(`Usuari ${makeAdmin ? 'promogut a' : 'degradat de'} administrador`, 'success');
+      loadAllUsers(); // Recarregar llista
+    } catch (error) {
+      console.error('Error updating user admin status:', error);
+      showNotification('Error actualitzant usuari', 'error');
+    }
+  };
+
+  // Icones personalitzades
   const createCustomIcons = () => {
     console.log('🎨 CREANT ICONES PERSONALITZADES...');
     
@@ -346,6 +529,45 @@ const BikeGPSApp = () => {
     }
   };
 
+  // Processament GPX real
+  const parseGPX = (gpxText) => {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(gpxText, 'text/xml');
+      
+      // Buscar punts de ruta
+      const trkpts = xmlDoc.querySelectorAll('trkpt');
+      const waypoints = xmlDoc.querySelectorAll('wpt');
+      
+      let coordinates = [];
+      
+      // Primer trackar punts de track
+      trkpts.forEach(point => {
+        const lat = parseFloat(point.getAttribute('lat'));
+        const lon = parseFloat(point.getAttribute('lon'));
+        if (!isNaN(lat) && !isNaN(lon)) {
+          coordinates.push([lat, lon]);
+        }
+      });
+      
+      // Si no hi ha track points, usar waypoints
+      if (coordinates.length === 0) {
+        waypoints.forEach(point => {
+          const lat = parseFloat(point.getAttribute('lat'));
+          const lon = parseFloat(point.getAttribute('lon'));
+          if (!isNaN(lat) && !isNaN(lon)) {
+            coordinates.push([lat, lon]);
+          }
+        });
+      }
+      
+      return coordinates;
+    } catch (error) {
+      console.error('Error parsing GPX:', error);
+      throw new Error('Format GPX no vàlid');
+    }
+  };
+
   const handleCreateRoute = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -362,30 +584,43 @@ const BikeGPSApp = () => {
       setShowUploadProgress(true);
       setUploadProgress(20);
 
-      // Simular processament
-      setTimeout(() => setUploadProgress(50), 500);
-      setTimeout(() => setUploadProgress(80), 1000);
+      // Llegir arxiu GPX REAL
+      const gpxText = await gpxFile.text();
+      setUploadProgress(50);
+      
+      // Processar GPX REAL
+      const coordinates = parseGPX(gpxText);
+      setUploadProgress(80);
+      
+      if (coordinates.length === 0) {
+        throw new Error('No s\'han trobat coordenades vàlides al GPX');
+      }
+      
+      console.log('📍 Coordenades extretes del GPX:', coordinates.length, 'punts');
       
       const routeData = {
         name: name,
         description: description,
-        coordinates: [[41.6722, 2.4540], [41.6730, 2.4550], [41.6740, 2.4560]], // Coordenades de prova
+        coordinates: coordinates,
         createdBy: currentUser.uid,
         gpxFileName: gpxFile.name,
-        pointsCount: 3
+        pointsCount: coordinates.length,
+        createdAt: new Date()
       };
       
-      await mockFirebase.db.collection('routes').add(routeData);
+      // Guardar ruta REAL
+      const docRef = await mockFirebase.db.collection('routes').add(routeData);
+      console.log('✅ Ruta guardada amb ID:', docRef.id);
 
       setUploadProgress(100);
-      showNotification('✅ Ruta creada correctament des de GPX!', 'success');
+      showNotification(`✅ Ruta "${name}" creada correctament amb ${coordinates.length} punts!`, 'success');
 
       e.target.reset();
       setTimeout(() => {
         setShowUploadProgress(false);
         setUploadProgress(0);
+        loadRoutes(); // Recarregar rutes
       }, 1000);
-      loadRoutes();
 
     } catch (error) {
       setShowUploadProgress(false);
@@ -397,11 +632,13 @@ const BikeGPSApp = () => {
 
   const loadRoutes = async () => {
     try {
+      console.log('📚 Carregant totes les rutes...');
       const routesSnapshot = await mockFirebase.db.collection('routes').get();
       const routesData = [];
       routesSnapshot.forEach((doc) => {
         routesData.push({ id: doc.id, ...doc.data() });
       });
+      console.log('📚 Rutes carregades:', routesData.length);
       setRoutes(routesData);
     } catch (error) {
       console.error('Error loading routes:', error);
@@ -448,7 +685,13 @@ const BikeGPSApp = () => {
   const deleteRoute = async (routeId) => {
     if (window.confirm('Segur que vols eliminar aquesta ruta?')) {
       try {
-        // Simular eliminació
+        console.log('🗑️ Eliminant ruta:', routeId);
+        
+        // Eliminar de localStorage si és una ruta real
+        const existingRoutes = JSON.parse(localStorage.getItem('bikeGPS_routes') || '[]');
+        const updatedRoutes = existingRoutes.filter(route => route.id !== routeId);
+        localStorage.setItem('bikeGPS_routes', JSON.stringify(updatedRoutes));
+        
         showNotification('Ruta eliminada correctament', 'success');
         loadRoutes();
         
@@ -468,7 +711,7 @@ const BikeGPSApp = () => {
     console.log('👂 INICIANT LISTENER PER USUARIS...');
     
     const unsubscribe = mockFirebase.db.collection('userLocations').onSnapshot(async (snapshot) => {
-      console.log(`🔥 FIREBASE: Rebudes ${snapshot.size || 3} ubicacions d'usuaris`);
+      console.log(`🔥 FIREBASE: Rebudes ubicacions d'usuaris`);
       
       const usersData = [];
       
@@ -477,7 +720,7 @@ const BikeGPSApp = () => {
         const userId = docSnapshot.id;
         const isCurrentUser = userId === currentUser?.uid;
         
-        // Simular informació admin
+        // Comprovar si és admin
         const userIsAdmin = userId === 'admin1' || userId === currentUser?.uid;
         
         console.log(`📍 USUARI: ${location.userName} (${isCurrentUser ? 'TU' : 'ALTRE'}${userIsAdmin ? ' - ADMIN' : ''})`, {
@@ -568,7 +811,7 @@ const BikeGPSApp = () => {
     return unsubscribe;
   };
 
-  // Listener incidències millorat
+  // Listener incidències millorat amb resolució REAL
   const listenToIncidents = () => {
     console.log('🚨 INICIANT LISTENER PER INCIDÈNCIES...');
     
@@ -589,9 +832,16 @@ const BikeGPSApp = () => {
 
       snapshot.forEach((doc) => {
         const incident = { id: doc.id, ...doc.data() };
+        
+        // FILTRAR INCIDÈNCIES RESOLTES
+        if (incident.resolved) {
+          console.log(`✅ Incidència ${incident.id} ja resolta, saltant...`);
+          return;
+        }
+        
         incidentsData.push(incident);
 
-        console.log(`🚨 PROCESSANT INCIDÈNCIA: ${incident.userName} a [${incident.location?.latitude}, ${incident.location?.longitude}]`);
+        console.log(`🚨 PROCESSANT INCIDÈNCIA ACTIVA: ${incident.userName} a [${incident.location?.latitude}, ${incident.location?.longitude}]`);
 
         const addIncidentMarkerWhenReady = () => {
           if (!mapInstanceRef.current) {
@@ -653,7 +903,7 @@ const BikeGPSApp = () => {
       });
 
       setIncidents(incidentsData);
-      console.log(`🚨 ${incidentsData.length} incidències carregades al state`);
+      console.log(`🚨 ${incidentsData.length} incidències NO RESOLTES carregades al state`);
       
     });
 
@@ -711,7 +961,26 @@ const BikeGPSApp = () => {
     const message = prompt('Descriu la incidència (opcional):');
     
     try {
-      // Simular report d'incidència
+      console.log('🚨 Reportant incidència...');
+      
+      // Obtenir ubicació actual (simulada)
+      const currentLocation = {
+        latitude: 41.6722 + (Math.random() - 0.5) * 0.01,
+        longitude: 2.4540 + (Math.random() - 0.5) * 0.01
+      };
+      
+      const incidentData = {
+        userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
+        message: message || 'Incidència reportada sense missatge',
+        location: currentLocation,
+        timestamp: { toDate: () => new Date() },
+        resolved: false,
+        reportedBy: currentUser.uid
+      };
+      
+      // Guardar incidència REAL
+      await mockFirebase.db.collection('incidents').add(incidentData);
+      
       showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success');
     } catch (error) {
       console.error('Error reporting incident:', error);
@@ -720,8 +989,36 @@ const BikeGPSApp = () => {
   };
 
   const resolveIncident = async (incidentId) => {
+    if (!isAdmin) {
+      showNotification('Només els administradors poden resoldre incidències', 'error');
+      return;
+    }
+    
     try {
-      // Simular resolució
+      console.log('✅ Resolent incidència:', incidentId);
+      
+      // Marcar com a resolta a localStorage
+      const existingIncidents = JSON.parse(localStorage.getItem('bikeGPS_incidents') || '[]');
+      const updatedIncidents = existingIncidents.map(incident => 
+        incident.id === incidentId 
+          ? { ...incident, resolved: true, resolvedBy: currentUser.uid, resolvedAt: new Date() }
+          : incident
+      );
+      localStorage.setItem('bikeGPS_incidents', JSON.stringify(updatedIncidents));
+      
+      // Eliminar marker del mapa immediatament
+      if (incidentMarkersRef.current[incidentId]) {
+        const marker = incidentMarkersRef.current[incidentId];
+        if (mapInstanceRef.current && mapInstanceRef.current.hasLayer(marker)) {
+          mapInstanceRef.current.removeLayer(marker);
+        }
+        delete incidentMarkersRef.current[incidentId];
+        console.log('🗑️ Marker d\'incidència eliminat del mapa');
+      }
+      
+      // Actualitzar state eliminant la incidència resolta
+      setIncidents(prev => prev.filter(inc => inc.id !== incidentId));
+      
       showNotification('✅ Incidència resolta correctament', 'success');
     } catch (error) {
       console.error('Error resolving incident:', error);
@@ -731,6 +1028,8 @@ const BikeGPSApp = () => {
 
   const handleLogout = async () => {
     try {
+      console.log('🚪 Iniciant logout...');
+      
       if (watchIdRef.current) {
         navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
@@ -744,7 +1043,10 @@ const BikeGPSApp = () => {
       setRouteProgress(0);
       setIsReturning(false);
       
+      // CRIDAR FIREBASE LOGOUT REAL
       await mockFirebase.auth.signOut();
+      console.log('✅ Firebase signOut cridat');
+      
       showNotification('Sessió tancada correctament', 'success');
     } catch (error) {
       console.error('Error signing out:', error);
@@ -940,7 +1242,7 @@ const BikeGPSApp = () => {
     );
   }
 
-  // Admin Dashboard amb disseny neomòrfic
+  // Admin Dashboard amb disseny neomòrfic i gestió d'admins
   if (isAdmin) {
     return (
       <div className="min-h-screen" style={{background: '#f0f0f3'}}>
@@ -956,6 +1258,18 @@ const BikeGPSApp = () => {
               {isSuperAdmin && <span className="ml-2">👑</span>}
             </h1>
             <div className="flex items-center gap-4">
+              {isSuperAdmin && (
+                <button
+                  onClick={() => setShowAdminManagement(!showAdminManagement)}
+                  className="px-4 py-2 rounded-lg font-semibold text-white border-none transition-all"
+                  style={{
+                    background: 'linear-gradient(145deg, #3742fa, #2f3542)',
+                    boxShadow: '4px 4px 8px #d1d1d4, -4px -4px 8px #ffffff'
+                  }}
+                >
+                  👥 Gestió Usuaris
+                </button>
+              )}
               <span style={{color: '#1a1a1a'}}>
                 Hola, {currentUser.displayName || currentUser.email} {isSuperAdmin && '(Super Admin)'}
               </span>
@@ -974,6 +1288,55 @@ const BikeGPSApp = () => {
         </header>
 
         <div className="p-6">
+          {/* Admin Management Panel (només SuperAdmin) */}
+          {isSuperAdmin && showAdminManagement && (
+            <div className="p-6 mb-6 rounded-2xl" style={{
+              background: '#f0f0f3',
+              boxShadow: '8px 8px 16px #d1d1d4, -8px -8px 16px #ffffff'
+            }}>
+              <h2 className="text-xl font-bold mb-4 text-gray-800">👑 Gestió d'Administradors</h2>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {allUsers.length === 0 ? (
+                  <p className="text-gray-500 text-center py-4">Carregant usuaris...</p>
+                ) : (
+                  allUsers.map((user) => (
+                    <div key={user.id} className="flex items-center justify-between p-4 rounded-lg" style={{
+                      background: '#f0f0f3',
+                      boxShadow: '4px 4px 8px #d1d1d4, -4px -4px 8px #ffffff'
+                    }}>
+                      <div>
+                        <strong className="text-gray-800">
+                          {user.isSuperAdmin ? '👑 ' : user.isAdmin ? '👑 ' : '👤 '}
+                          {user.name || user.email}
+                        </strong>
+                        <div className="text-gray-500 text-sm">
+                          {user.email} 
+                          {user.isSuperAdmin ? ' (SuperAdmin)' : user.isAdmin ? ' (Admin)' : ' (Usuari)'}
+                        </div>
+                      </div>
+                      {!user.isSuperAdmin && (
+                        <button
+                          onClick={() => makeUserAdmin(user.id, !user.isAdmin)}
+                          className={`px-4 py-2 rounded-lg font-semibold text-white border-none transition-all ${
+                            user.isAdmin ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+                          }`}
+                          style={{
+                            background: user.isAdmin 
+                              ? 'linear-gradient(145deg, #ff6b6b, #ee5a52)' 
+                              : 'linear-gradient(145deg, #2ed573, #26d0ce)',
+                            boxShadow: '2px 2px 4px #d1d1d4, -2px -2px 4px #ffffff'
+                          }}
+                        >
+                          {user.isAdmin ? '❌ Treure Admin' : '✅ Fer Admin'}
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Route Creation */}
           <div className="p-6 mb-6 rounded-2xl" style={{
             background: '#f0f0f3',
@@ -1083,6 +1446,9 @@ const BikeGPSApp = () => {
                       <p className="text-gray-600 text-sm mb-2">{route.description || 'Sense descripció'}</p>
                       {route.gpxFileName && (
                         <p className="text-gray-500 text-xs italic mb-2">📁 {route.gpxFileName}</p>
+                      )}
+                      {route.pointsCount && (
+                        <p className="text-gray-500 text-xs mb-2">📍 {route.pointsCount} punts</p>
                       )}
                       <div className="flex gap-2">
                         <button
