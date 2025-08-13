@@ -50,7 +50,8 @@ const BikeGPSApp = () => {
   const incidentMarkersRef = useRef({});
   const routePolylinesRef = useRef([]);
   const hasSetInitialLocationRef = useRef(false);
-  const listenersRef = useRef({ users: null, incidents: null });
+  const listenersRef = useRef({ users: null, incidents: null, routes: null }); // AFEGIT: listener de rutes
+  const currentUserLocationRef = useRef(null); // AFEGIT: per trackear la ubicació actual
 
   // Initialize auth listener
   useEffect(() => {
@@ -74,6 +75,7 @@ const BikeGPSApp = () => {
         setRouteProgress(0);
         setIsReturning(false);
         setLoading(false);
+        currentUserLocationRef.current = null; // AFEGIT: netejar ubicació
         
         // Netejar mapa
         if (mapInstanceRef.current) {
@@ -97,42 +99,47 @@ const BikeGPSApp = () => {
     return () => unsubscribe();
   }, []);
 
-  // Listeners separats per usuaris i incidències
+  // CORRECCIÓ 1: Listeners separats i listener de rutes en temps real
   useEffect(() => {
     if (!currentUser) {
-      if (listenersRef.current.users) {
-        listenersRef.current.users();
-        listenersRef.current.users = null;
-      }
-      if (listenersRef.current.incidents) {
-        listenersRef.current.incidents();
-        listenersRef.current.incidents = null;
-      }
+      // Netejar tots els listeners quan no hi ha usuari
+      Object.keys(listenersRef.current).forEach(key => {
+        if (listenersRef.current[key]) {
+          listenersRef.current[key]();
+          listenersRef.current[key] = null;
+        }
+      });
       return;
     }
 
     console.log('🎯 Iniciant listeners per usuari connectat...');
     
+    // Listener usuaris
     if (!listenersRef.current.users) {
       console.log('👂 Iniciant listener usuaris...');
       listenersRef.current.users = listenToUsers();
     }
     
+    // Listener incidències
     if (!listenersRef.current.incidents) {
       console.log('🚨 Iniciant listener incidències...');
       listenersRef.current.incidents = listenToIncidents();
     }
 
+    // AFEGIT: Listener rutes en temps real
+    if (!listenersRef.current.routes) {
+      console.log('📚 Iniciant listener rutes...');
+      listenersRef.current.routes = listenToRoutes();
+    }
+
     return () => {
       console.log('🧹 Netejant listeners...');
-      if (listenersRef.current.users) {
-        listenersRef.current.users();
-        listenersRef.current.users = null;
-      }
-      if (listenersRef.current.incidents) {
-        listenersRef.current.incidents();
-        listenersRef.current.incidents = null;
-      }
+      Object.keys(listenersRef.current).forEach(key => {
+        if (listenersRef.current[key]) {
+          listenersRef.current[key]();
+          listenersRef.current[key] = null;
+        }
+      });
     };
   }, [currentUser]);
 
@@ -199,8 +206,7 @@ const BikeGPSApp = () => {
   // Càrrega de dades
   useEffect(() => {
     if (currentUser) {
-      console.log('📚 Carregant rutes per usuari connectat...');
-      loadRoutes();
+      console.log('📚 Usuari connectat, els listeners ja carregaran les dades...');
       
       if (isSuperAdmin) {
         loadAllUsers();
@@ -264,6 +270,54 @@ const BikeGPSApp = () => {
       console.error('Error checking admin status:', error);
       showNotification('Error carregant aplicació: ' + error.message, 'error');
       setLoading(false);
+    }
+  };
+
+  // AFEGIT: Listener de rutes en temps real
+  const listenToRoutes = () => {
+    console.log('📚 INICIANT LISTENER PER RUTES...');
+    
+    const routesQuery = query(
+      collection(db, 'routes'), 
+      where('deleted', '!=', true)
+    );
+    
+    const unsubscribe = onSnapshot(routesQuery, (snapshot) => {
+      console.log(`📚 FIREBASE: Rebudes ${snapshot.docs.length} rutes`);
+      
+      const routesData = [];
+      snapshot.forEach((doc) => {
+        routesData.push({ id: doc.id, ...doc.data() });
+      });
+      
+      console.log('📚 Actualitzant state amb rutes:', routesData.length);
+      setRoutes(routesData);
+    }, (error) => {
+      console.error('❌ Error listener rutes:', error);
+      // En cas d'error, intentar carregar manualment
+      loadRoutesManually();
+    });
+
+    return unsubscribe;
+  };
+
+  // AFEGIT: Mètode de fallback per carregar rutes manualment
+  const loadRoutesManually = async () => {
+    try {
+      console.log('📚 Carregant rutes manualment...');
+      const routesSnapshot = await getDocs(collection(db, 'routes'));
+      const routesData = [];
+      routesSnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (!data.deleted) { // Filtrar eliminades
+          routesData.push({ id: doc.id, ...data });
+        }
+      });
+      console.log('📚 Rutes carregades manualment:', routesData.length);
+      setRoutes(routesData);
+    } catch (error) {
+      console.error('Error loading routes manually:', error);
+      showNotification('Error carregant rutes', 'error');
     }
   };
 
@@ -463,6 +517,7 @@ const BikeGPSApp = () => {
         createdBy: currentUser.uid,
         gpxFileName: gpxFile.name,
         pointsCount: coordinates.length,
+        deleted: false, // AFEGIT: Marcar explícitament com NO eliminada
         createdAt: serverTimestamp()
       };
       
@@ -477,7 +532,7 @@ const BikeGPSApp = () => {
       setTimeout(() => {
         setShowUploadProgress(false);
         setUploadProgress(0);
-        loadRoutes(); // Recarregar rutes
+        // NO cal cridar loadRoutes() perquè el listener ho farà automàticament
       }, 1000);
 
     } catch (error) {
@@ -488,23 +543,7 @@ const BikeGPSApp = () => {
     }
   };
 
-  const loadRoutes = async () => {
-    try {
-      console.log('📚 Carregant totes les rutes...');
-      // CORRECCIÓ: Filtrar rutes no eliminades
-      const routesQuery = query(collection(db, 'routes'), where('deleted', '!=', true));
-      const routesSnapshot = await getDocs(routesQuery);
-      const routesData = [];
-      routesSnapshot.forEach((doc) => {
-        routesData.push({ id: doc.id, ...doc.data() });
-      });
-      console.log('📚 Rutes carregades:', routesData.length);
-      setRoutes(routesData);
-    } catch (error) {
-      console.error('Error loading routes:', error);
-      showNotification('Error carregant rutes', 'error');
-    }
-  };
+  // ELIMINAT: loadRoutes ja no es necessari perquè tenim listener en temps real
 
   const selectRoute = (routeId, routeData) => {
     setCurrentRoute({ id: routeId, ...routeData });
@@ -575,7 +614,7 @@ const BikeGPSApp = () => {
         });
         
         showNotification('Ruta eliminada correctament', 'success');
-        loadRoutes();
+        // NO cal cridar loadRoutes() perquè el listener actualitzarà automàticament
         
         if (currentRoute?.id === routeId) {
           setCurrentRoute(null);
@@ -614,6 +653,32 @@ const BikeGPSApp = () => {
             lng: location.longitude,
             timestamp: location.timestamp?.toDate?.()?.toLocaleTimeString() || 'No timestamp'
           });
+
+          // CORRECCIÓ 2: Guardar ubicació de l'usuari actual
+          if (isCurrentUser) {
+            currentUserLocationRef.current = {
+              lat: location.latitude,
+              lng: location.longitude
+            };
+            
+            // CORRECCIÓ 2: Centrar mapa en l'usuari actual
+            if (mapInstanceRef.current && !hasSetInitialLocationRef.current) {
+              console.log('🎯 Centrant mapa en usuari actual per primera vegada');
+              mapInstanceRef.current.setView([location.latitude, location.longitude], 15);
+              hasSetInitialLocationRef.current = true;
+            } else if (mapInstanceRef.current) {
+              // CORRECCIÓ 2: Mantenir l'usuari sempre visible
+              const currentCenter = mapInstanceRef.current.getCenter();
+              const userLatLng = L.latLng(location.latitude, location.longitude);
+              const distance = currentCenter.distanceTo(userLatLng);
+              
+              // Si l'usuari està massa lluny del centre (més de 500m), recentrar
+              if (distance > 500) {
+                console.log('📍 Recentrant mapa - usuari massa lluny:', distance, 'm');
+                mapInstanceRef.current.panTo(userLatLng);
+              }
+            }
+          }
 
           // Afegir a la llista d'usuaris actius
           const userEntry = {
@@ -863,10 +928,8 @@ const BikeGPSApp = () => {
         timestamp: serverTimestamp()
       }, { merge: true });
       
-      if (!hasSetInitialLocationRef.current && mapInstanceRef.current) {
-        mapInstanceRef.current.setView([lat, lng], 15);
-        hasSetInitialLocationRef.current = true;
-      }
+      // ELIMINAT: La lògica de centrar el mapa s'ha mogut al listener d'usuaris
+      
     } catch (error) {
       console.error('❌ Error actualitzant ubicació:', error);
     }
@@ -913,30 +976,12 @@ const BikeGPSApp = () => {
         showNotification('Error obtenint ubicació per a la incidència', 'error');
         
         // Si no podem obtenir la ubicació actual, utilitzar l'última coneguda
-        if (currentUser) {
+        if (currentUser && currentUserLocationRef.current) {
           try {
-            const userLocationRef = doc(db, 'userLocations', currentUser.uid);
-            const userLocationDoc = await getDoc(userLocationRef);
-            
-            let fallbackLocation;
-            if (userLocationDoc.exists()) {
-              const data = userLocationDoc.data();
-              fallbackLocation = {
-                latitude: data.latitude,
-                longitude: data.longitude
-              };
-            } else {
-              // Última opció: ubicació per defecte
-              fallbackLocation = {
-                latitude: 41.6722,
-                longitude: 2.4540
-              };
-            }
-            
             const incidentData = {
               userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
               message: (message || 'Incidència reportada sense missatge') + ' (ubicació aproximada)',
-              location: fallbackLocation,
+              location: currentUserLocationRef.current,
               timestamp: serverTimestamp(),
               resolved: false,
               reportedBy: currentUser.uid
@@ -947,6 +992,30 @@ const BikeGPSApp = () => {
             
           } catch (fallbackError) {
             console.error('Error reportant incidència amb fallback:', fallbackError);
+            showNotification('Error reportant incidència', 'error');
+          }
+        } else {
+          // Última opció: ubicació per defecte
+          try {
+            const fallbackLocation = {
+              latitude: 41.6722,
+              longitude: 2.4540
+            };
+            
+            const incidentData = {
+              userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
+              message: (message || 'Incidència reportada sense missatge') + ' (ubicació per defecte)',
+              location: fallbackLocation,
+              timestamp: serverTimestamp(),
+              resolved: false,
+              reportedBy: currentUser.uid
+            };
+            
+            await addDoc(collection(db, 'incidents'), incidentData);
+            showNotification('🚨 Incidència reportada amb ubicació per defecte!', 'success');
+            
+          } catch (finalError) {
+            console.error('Error reportant incidència final:', finalError);
             showNotification('Error reportant incidència', 'error');
           }
         }
@@ -1399,7 +1468,7 @@ const BikeGPSApp = () => {
               boxShadow: '8px 8px 16px #d1d1d4, -8px -8px 16px #ffffff'
             }}>
               <h3 className="text-lg font-bold mb-4 pb-2 border-b-2 border-yellow-400">
-                Rutes Disponibles
+                Rutes Disponibles ({routes.length})
               </h3>
               <div className="space-y-2 max-h-80 overflow-y-auto">
                 {routes.length === 0 ? (
@@ -1600,7 +1669,7 @@ const BikeGPSApp = () => {
             boxShadow: '8px 8px 16px #d1d1d4, -8px -8px 16px #ffffff'
           }}>
             <h3 className="text-lg font-bold mb-4 pb-2 border-b-2 border-yellow-400">
-              Rutes Disponibles
+              Rutes Disponibles ({routes.length})
             </h3>
             <div className="space-y-3 max-h-80 overflow-y-auto">
               {routes.length === 0 ? (
