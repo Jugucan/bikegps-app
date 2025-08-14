@@ -89,6 +89,13 @@ const BikeGPSApp = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [showAdminManagement, setShowAdminManagement] = useState(false);
+  const [debugLogs, setDebugLogs] = useState([]); // Per debug al mòbil
+
+  // Debug logger per mòbil
+  const addDebugLog = (message) => {
+    setDebugLogs(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
+    console.log(message);
+  };
 
   // Initialize location tracking when user logs in
   useEffect(() => {
@@ -102,8 +109,11 @@ const BikeGPSApp = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (mapInstanceRef.current) {
-        console.log('🗺️ Forçant invalidateSize per mòbil...');
+        addDebugLog('🗺️ Forçant invalidateSize per mòbil...');
         mapInstanceRef.current.invalidateSize();
+        addDebugLog('🗺️ InvalidateSize executat');
+      } else {
+        addDebugLog('❌ MapInstanceRef no disponible');
       }
     }, 500); // Espera més temps per mòbil
 
@@ -284,36 +294,31 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa gestionat pel hook useMap - CONTENIMENT ARREGLAT */}
+          {/* Mapa gestionat pel hook useMap - VERSIÓ SIMPLIFICADA */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
             <div 
-              className="w-full rounded-lg border border-gray-300 overflow-hidden bg-gray-100 relative"
+              ref={mapRef}
+              className="w-full h-96 rounded-lg border border-gray-300 overflow-hidden bg-gray-100"
               style={{ 
                 height: '400px',
-                minHeight: '400px',
-                position: 'relative',
-                isolation: 'isolate' // Crea un nou context d'apilament
+                minHeight: '400px'
               }}
-            >
-              <div 
-                ref={mapRef} 
-                className="absolute inset-0 w-full h-full"
-                style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  zIndex: 1,
-                  clipPath: 'inset(0)' // Força el conteniment
-                }}
-              ></div>
-            </div>
+            ></div>
             <p className="text-sm text-gray-500 mt-2">
               Mapa gestionat pels hooks useMap i useLocation. 
               {mapInstanceRef.current ? '✅ Mapa actiu' : '⏳ Carregant mapa...'}
             </p>
+            
+            {/* Debug panel per mòbil */}
+            {debugLogs.length > 0 && (
+              <div className="mt-2 p-2 bg-gray-800 text-green-400 text-xs rounded font-mono">
+                <div className="font-bold mb-1">Debug Log:</div>
+                {debugLogs.map((log, i) => (
+                  <div key={i}>{log}</div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
