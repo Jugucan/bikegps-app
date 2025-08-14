@@ -98,7 +98,17 @@ const BikeGPSApp = () => {
     }
   }, [currentUser, startLocationTracking]);
 
-  // EL MAPA JA S'INICIALITZA AL useMap HOOK - No cal duplicar-lo
+  // Forçar invalidateSize del mapa quan es renderitza (arregla problema mòbil)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (mapInstanceRef.current) {
+        console.log('🗺️ Forçant invalidateSize per mòbil...');
+        mapInstanceRef.current.invalidateSize();
+      }
+    }, 500); // Espera més temps per mòbil
+
+    return () => clearTimeout(timer);
+  }, [mapInstanceRef.current]);
 
   // Route creation handler
   const handleCreateRoute = async (e) => {
@@ -274,18 +284,32 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa gestionat pel hook useMap */}
+          {/* Mapa gestionat pel hook useMap - CONTENIMENT ARREGLAT */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
             <div 
-              ref={mapRef} 
-              className="w-full rounded-lg border border-gray-300 overflow-hidden bg-gray-100"
+              className="w-full rounded-lg border border-gray-300 overflow-hidden bg-gray-100 relative"
               style={{ 
                 height: '400px',
                 minHeight: '400px',
-                position: 'relative'
+                position: 'relative',
+                isolation: 'isolate' // Crea un nou context d'apilament
               }}
-            ></div>
+            >
+              <div 
+                ref={mapRef} 
+                className="absolute inset-0 w-full h-full"
+                style={{ 
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  zIndex: 1,
+                  clipPath: 'inset(0)' // Força el conteniment
+                }}
+              ></div>
+            </div>
             <p className="text-sm text-gray-500 mt-2">
               Mapa gestionat pels hooks useMap i useLocation. 
               {mapInstanceRef.current ? '✅ Mapa actiu' : '⏳ Carregant mapa...'}
