@@ -6,18 +6,19 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, addDoc, updateDoc, onSnapshot, query, where, serverTimestamp } from 'firebase/firestore';
 
-// Components
+// Components - NOMÉS importem els que existeixen
 import AuthScreen from './components/AuthScreen';
-import AdminDashboard from './components/AdminDashboard';
-import UserDashboard from './components/UserDashboard';
+// COMENTAT TEMPORALMENT fins que creem aquests components:
+// import AdminDashboard from './components/AdminDashboard';
+// import UserDashboard from './components/UserDashboard';
 
-// Hooks
+// Hooks - ACTIVATS perquè ja existeixen
 import { useAuth } from './hooks/useAuth';
 import { useMap } from './hooks/useMap';
 import { useLocation } from './hooks/useLocation';
 import { useFirebaseListeners } from './hooks/useFirebaseListeners';
 
-// Utils
+// Utils - ACTIVATS perquè ja existeixen
 import { createCustomIcons, showNotification } from './utils/mapUtils';
 import { parseGPX } from './utils/gpxUtils';
 
@@ -39,7 +40,7 @@ export const db = getFirestore(app);
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
 
 const BikeGPSApp = () => {
-  // Auth state
+  // Auth state - USANT ELS HOOKS EXISTENTS
   const {
     currentUser,
     isAdmin,
@@ -50,7 +51,7 @@ const BikeGPSApp = () => {
     handleLogout
   } = useAuth(SUPER_ADMIN_UID);
 
-  // Map state
+  // Map state - USANT ELS HOOKS EXISTENTS
   const {
     mapRef,
     mapInstanceRef,
@@ -62,14 +63,14 @@ const BikeGPSApp = () => {
     isReturning
   } = useMap();
 
-  // Location tracking
+  // Location tracking - USANT ELS HOOKS EXISTENTS
   const {
     startLocationTracking,
     updateUserLocation,
     currentUserLocationRef
   } = useLocation(currentUser);
 
-  // Firebase listeners
+  // Firebase listeners - USANT ELS HOOKS EXISTENTS
   const {
     routes,
     users,
@@ -236,6 +237,64 @@ const BikeGPSApp = () => {
     );
   }
 
+  // PANTALLA TEMPORAL per usuaris logejats (fins que creem AdminDashboard/UserDashboard)
+  return (
+    <div className="min-h-screen" style={{background: '#f0f0f3'}}>
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">
+              <span style={{color: '#ffd02e'}}>Bike</span>
+              <span style={{color: '#1a1a1a'}}>GPS</span>
+            </h1>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+            >
+              Tancar Sessió
+            </button>
+          </div>
+          
+          <div className="text-center py-12">
+            <h2 className="text-xl font-semibold mb-4">Benvingut/da, {currentUser.email}!</h2>
+            <p className="text-gray-600 mb-4">L'aplicació s'està construint pas a pas.</p>
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <p className="text-sm text-blue-700 mb-2">
+                ✅ Hooks carregats: useAuth, useMap, useLocation, useFirebaseListeners
+              </p>
+              <p className="text-sm text-blue-700 mb-2">
+                ✅ Utils carregats: mapUtils, gpxUtils
+              </p>
+              <p className="text-sm text-orange-700">
+                ⏳ Falta crear: AdminDashboard.jsx i UserDashboard.jsx
+              </p>
+            </div>
+          </div>
+          
+          {/* Mapa temporal per comprovar que funciona */}
+          <div ref={mapRef} className="w-full h-96 rounded-lg border"></div>
+        </div>
+      </div>
+      
+      {/* Sistema de notificacions dels utils */}
+      {notification && (
+        <div className={`fixed top-4 right-4 p-4 rounded-lg text-white z-50 ${
+          notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+        }`}>
+          {notification.message}
+          <button
+            onClick={() => setNotification(null)}
+            className="ml-2 text-white hover:text-gray-200"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // CODI COMENTAT - Ho activarem quan tinguem tots els components:
+  /*
   // Admin dashboard
   if (isAdmin) {
     return (
@@ -281,6 +340,7 @@ const BikeGPSApp = () => {
       notification={notification}
     />
   );
+  */
 };
 
 export default BikeGPSApp;
