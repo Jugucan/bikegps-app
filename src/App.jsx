@@ -98,22 +98,52 @@ const BikeGPSApp = () => {
     }
   }, [currentUser, startLocationTracking]);
 
-  // Inicialitzar mapa temporal
+  // Inicialitzar mapa temporal - VERSIÓ CORREGIDA
   useEffect(() => {
-    if (mapRef.current && !mapInstanceRef.current) {
-      // Crear mapa centrat a Catalunya
-      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 10);
-      
-      // Afegir capa base
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(map);
-      
-      // Guardar referència
-      mapInstanceRef.current = map;
-      
-      console.log('🗺️ Mapa inicialitzat temporalment');
-    }
+    // Esperar un tic perquè el DOM estigui completament renderitzat
+    const timer = setTimeout(() => {
+      if (mapRef.current && !mapInstanceRef.current) {
+        try {
+          // Netejar el contenidor abans de crear el mapa
+          mapRef.current.innerHTML = '';
+          
+          // Crear mapa centrat a Catalunya
+          const map = L.map(mapRef.current, {
+            // Opcions per evitar bugs visuals
+            fadeAnimation: false,
+            zoomAnimation: false,
+            markerZoomAnimation: false
+          }).setView([41.6722, 2.4540], 10);
+          
+          // Afegir capa base
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+          }).addTo(map);
+          
+          // Forçar invalidació de mida després de crear-lo
+          setTimeout(() => {
+            map.invalidateSize();
+          }, 100);
+          
+          // Guardar referència
+          mapInstanceRef.current = map;
+          
+          console.log('🗺️ Mapa inicialitzat correctament');
+        } catch (error) {
+          console.error('Error inicialitzant mapa:', error);
+        }
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      // Netejar mapa quan el component es desmunti
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    };
   }, [mapRef, mapInstanceRef]);
 
   // Route creation handler
@@ -290,13 +320,19 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa temporal per comprovar que funciona */}
+          {/* Mapa temporal per comprovar que funciona - ESTILS CORREGITS */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa provisional:</h3>
             <div 
               ref={mapRef} 
-              className="w-full h-96 rounded-lg border border-gray-300"
-              style={{ minHeight: '400px' }}
+              className="w-full rounded-lg border border-gray-300 overflow-hidden"
+              style={{ 
+                height: '400px',
+                minHeight: '400px',
+                maxHeight: '400px',
+                position: 'relative',
+                zIndex: 1
+              }}
             ></div>
             <p className="text-sm text-gray-500 mt-2">
               Aquest mapa és temporal per comprovar que Leaflet funciona correctament.
