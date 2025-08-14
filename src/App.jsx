@@ -105,6 +105,48 @@ const BikeGPSApp = () => {
     }
   }, [currentUser, startLocationTracking]);
 
+  // FORÇAR INICIALITZACIÓ DEL MAPA si el hook no ho fa
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (mapRef.current && !mapInstanceRef.current) {
+        addDebugLog('🔧 Inicialitzant mapa manualment...');
+        try {
+          // Crear mapa bàsic
+          const map = L.map(mapRef.current, {
+            center: [41.6722, 2.4540],
+            zoom: 13,
+            zoomControl: true
+          });
+          
+          // Afegir capa base
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+          }).addTo(map);
+          
+          // Guardar referència (simulant el que hauria de fer useMap)
+          mapInstanceRef.current = map;
+          
+          addDebugLog('✅ Mapa inicialitzat manualment');
+          
+          // Forçar mida després d'un moment
+          setTimeout(() => {
+            map.invalidateSize();
+            addDebugLog('✅ InvalidateSize executat');
+          }, 200);
+          
+        } catch (error) {
+          addDebugLog('❌ Error creant mapa: ' + error.message);
+        }
+      } else if (mapInstanceRef.current) {
+        addDebugLog('✅ Mapa ja inicialitzat pel hook');
+      } else {
+        addDebugLog('❌ MapRef no disponible');
+      }
+    }, 1000); // Temps suficient perquè el hook actui primer
+
+    return () => clearTimeout(timer);
+  }, [mapRef.current, currentUser]); // Executar quan l'usuari es loggeja
+
   // Forçar invalidateSize del mapa quan es renderitza (arregla problema mòbil)
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -113,9 +155,9 @@ const BikeGPSApp = () => {
         mapInstanceRef.current.invalidateSize();
         addDebugLog('🗺️ InvalidateSize executat');
       } else {
-        addDebugLog('❌ MapInstanceRef no disponible');
+        addDebugLog('❌ MapInstanceRef encara no disponible');
       }
-    }, 500); // Espera més temps per mòbil
+    }, 1500); // Més temps per assegurar que el mapa existeix
 
     return () => clearTimeout(timer);
   }, [mapInstanceRef.current]);
