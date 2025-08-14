@@ -336,37 +336,57 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa amb conteniment forçat */}
+          {/* Mapa amb conteniment rotatiu optimitzat */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
+            
+            {/* Contenidor extern amb mides fixes i overflow hidden */}
             <div 
               className="w-full rounded-lg border border-gray-300 bg-gray-100 relative"
               style={{ 
                 height: '400px',
                 minHeight: '400px',
                 overflow: 'hidden', // CLAU: Talla tot el que surti
-                position: 'relative'
+                position: 'relative',
+                borderRadius: '0.5rem' // Mantenir cantons arrodonits
               }}
             >
-              {/* Contenidor intern que conté el mapa */}
+              {/* Contenidor intern escalat per cobrir rotacions */}
               <div
-                ref={mapRef}
-                className="absolute inset-0"
+                className="absolute"
                 style={{
-                  position: 'absolute',
-                  top: '0',
-                  left: '0',
-                  width: '100%',
-                  height: '100%',
-                  transformOrigin: 'center center', // Rotació des del centre
-                  // Forçar que sempre ompli tot l'espai encara que roti
-                  minWidth: '141.42%', // √2 * 100% per cobrir diagonals
-                  minHeight: '141.42%',
-                  marginTop: '-20.71%', // (141.42 - 100) / 2
-                  marginLeft: '-20.71%'
+                  // Posicionament al centre del contenidor pare
+                  top: '50%',
+                  left: '50%',
+                  
+                  // Mides escalades per cobrir diagonals quan es roti
+                  // √2 ≈ 1.414 per cobrir completament les diagonals
+                  width: '150%', // Més del necessari per assegurar cobertura total
+                  height: '150%',
+                  
+                  // Centrar l'element escalat
+                  transform: 'translate(-50%, -50%)',
+                  
+                  // Assegurar que sempre manté la seva posició
+                  transformOrigin: 'center center',
+                  
+                  // Fons de fallback per debug (opcional)
+                  backgroundColor: 'rgba(0,0,0,0.05)'
                 }}
-              />
+              >
+                {/* El mapa real dins del contenidor escalat */}
+                <div
+                  ref={mapRef}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative',
+                    borderRadius: '0.5rem' // Mantenir estil
+                  }}
+                />
+              </div>
             </div>
+            
             <p className="text-sm text-gray-500 mt-2">
               Mapa gestionat pels hooks useMap i useLocation. 
               {mapInstanceRef.current ? '✅ Mapa actiu' : '⏳ Carregant mapa...'}
@@ -381,6 +401,16 @@ const BikeGPSApp = () => {
                 ))}
               </div>
             )}
+            
+            {/* Informació tècnica del fix */}
+            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+              <div className="font-semibold text-yellow-800 mb-1">🔧 Solució mapa rotatiu:</div>
+              <div className="text-yellow-700">
+                • Contenidor extern: overflow hidden + mides fixes<br/>
+                • Contenidor intern: 150% width/height + centrat<br/>
+                • Mapa: 100% del contenidor intern escalat
+              </div>
+            </div>
           </div>
         </div>
       </div>
