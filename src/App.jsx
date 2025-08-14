@@ -336,17 +336,37 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa gestionat pel hook useMap - VERSIÓ SIMPLIFICADA */}
+          {/* Mapa amb conteniment forçat */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
             <div 
-              ref={mapRef}
-              className="w-full h-96 rounded-lg border border-gray-300 overflow-hidden bg-gray-100"
+              className="w-full rounded-lg border border-gray-300 bg-gray-100 relative"
               style={{ 
                 height: '400px',
-                minHeight: '400px'
+                minHeight: '400px',
+                overflow: 'hidden', // CLAU: Talla tot el que surti
+                position: 'relative'
               }}
-            ></div>
+            >
+              {/* Contenidor intern que conté el mapa */}
+              <div
+                ref={mapRef}
+                className="absolute inset-0"
+                style={{
+                  position: 'absolute',
+                  top: '0',
+                  left: '0',
+                  width: '100%',
+                  height: '100%',
+                  transformOrigin: 'center center', // Rotació des del centre
+                  // Forçar que sempre ompli tot l'espai encara que roti
+                  minWidth: '141.42%', // √2 * 100% per cobrir diagonals
+                  minHeight: '141.42%',
+                  marginTop: '-20.71%', // (141.42 - 100) / 2
+                  marginLeft: '-20.71%'
+                }}
+              />
+            </div>
             <p className="text-sm text-gray-500 mt-2">
               Mapa gestionat pels hooks useMap i useLocation. 
               {mapInstanceRef.current ? '✅ Mapa actiu' : '⏳ Carregant mapa...'}
