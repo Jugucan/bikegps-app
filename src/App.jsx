@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css'; // IMPORTANT: CSS de Leaflet
 
 // Firebase imports
 import { initializeApp } from 'firebase/app';
@@ -96,6 +97,24 @@ const BikeGPSApp = () => {
       startLocationTracking();
     }
   }, [currentUser, startLocationTracking]);
+
+  // Inicialitzar mapa temporal
+  useEffect(() => {
+    if (mapRef.current && !mapInstanceRef.current) {
+      // Crear mapa centrat a Catalunya
+      const map = L.map(mapRef.current).setView([41.6722, 2.4540], 10);
+      
+      // Afegir capa base
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+      
+      // Guardar referència
+      mapInstanceRef.current = map;
+      
+      console.log('🗺️ Mapa inicialitzat temporalment');
+    }
+  }, [mapRef, mapInstanceRef]);
 
   // Route creation handler
   const handleCreateRoute = async (e) => {
@@ -272,7 +291,17 @@ const BikeGPSApp = () => {
           </div>
           
           {/* Mapa temporal per comprovar que funciona */}
-          <div ref={mapRef} className="w-full h-96 rounded-lg border"></div>
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Mapa provisional:</h3>
+            <div 
+              ref={mapRef} 
+              className="w-full h-96 rounded-lg border border-gray-300"
+              style={{ minHeight: '400px' }}
+            ></div>
+            <p className="text-sm text-gray-500 mt-2">
+              Aquest mapa és temporal per comprovar que Leaflet funciona correctament.
+            </p>
+          </div>
         </div>
       </div>
       
