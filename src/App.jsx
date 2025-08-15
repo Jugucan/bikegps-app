@@ -111,27 +111,34 @@ const BikeGPSApp = () => {
       if (mapRef.current && !mapInstanceRef.current) {
         addDebugLog('🔧 Inicialitzant mapa manualment...');
         try {
-          // Crear mapa bàsic
+          // Crear mapa bàsic amb zoom màxim
           const map = L.map(mapRef.current, {
             center: [41.6722, 2.4540],
-            zoom: 13,
-            zoomControl: true
+            zoom: 18, // Zoom màxim per defecte
+            maxZoom: 19, // Permetre zoom encara més proper
+            zoomControl: true,
+            // Desactivar rotació automàtica del mapa
+            bearing: 0,
+            pitch: 0
           });
           
           // Afegir capa base
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
           }).addTo(map);
           
           // Guardar referència (simulant el que hauria de fer useMap)
           mapInstanceRef.current = map;
           
-          addDebugLog('✅ Mapa inicialitzat manualment');
+          addDebugLog('✅ Mapa inicialitzat manualment amb zoom màxim');
           
           // Forçar mida després d'un moment
           setTimeout(() => {
             map.invalidateSize();
-            addDebugLog('✅ InvalidateSize executat');
+            // Forçar zoom màxim després de la inicialització
+            map.setZoom(18);
+            addDebugLog('✅ InvalidateSize i zoom màxim aplicats');
           }, 200);
           
         } catch (error) {
@@ -139,6 +146,11 @@ const BikeGPSApp = () => {
         }
       } else if (mapInstanceRef.current) {
         addDebugLog('✅ Mapa ja inicialitzat pel hook');
+        // Si el mapa ja existeix, aplicar zoom màxim
+        setTimeout(() => {
+          mapInstanceRef.current.setZoom(18);
+          addDebugLog('✅ Zoom màxim aplicat al mapa existent');
+        }, 500);
       } else {
         addDebugLog('❌ MapRef no disponible');
       }
@@ -336,54 +348,92 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa amb conteniment rotatiu optimitzat */}
+          {/* Mapa amb solució anti-rotació robusta */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
             
             {/* Contenidor extern amb mides fixes i overflow hidden */}
             <div 
-              className="w-full rounded-lg border border-gray-300 bg-gray-100 relative"
+              className="w-full rounded-lg border border-gray-300 bg-gray-900 relative"
               style={{ 
                 height: '400px',
                 minHeight: '400px',
                 overflow: 'hidden', // CLAU: Talla tot el que surti
                 position: 'relative',
-                borderRadius: '0.5rem' // Mantenir cantons arrodonits
+                borderRadius: '0.5rem',
+                // Fons fosc per veure millor els espais buits
+                backgroundColor: '#1a1a1a'
               }}
             >
-              {/* Contenidor intern escalat per cobrir rotacions */}
+              {/* Contenidor rotatiu que anula qualsevol rotació */}
               <div
                 className="absolute"
                 style={{
-                  // Posicionament al centre del contenidor pare
-                  top: '50%',
-                  left: '50%',
+                  // Posicionament absolut que cobreix tot el contenidor
+                  top: '0',
+                  left: '0',
+                  width: '100%',
+                  height: '100%',
                   
-                  // Mides escalades per cobrir diagonals quan es roti
-                  // √2 ≈ 1.414 per cobrir completament les diagonals
-                  width: '150%', // Més del necessari per assegurar cobertura total
-                  height: '150%',
-                  
-                  // Centrar l'element escalat
-                  transform: 'translate(-50%, -50%)',
-                  
-                  // Assegurar que sempre manté la seva posició
+                  // FORÇAR rotació 0 sempre per anular rotacions dels hooks
+                  transform: 'rotate(0deg) !important',
                   transformOrigin: 'center center',
                   
-                  // Fons de fallback per debug (opcional)
-                  backgroundColor: 'rgba(0,0,0,0.05)'
+                  // Z-index alt per assegurar que està al damunt
+                  zIndex: 10,
+                  
+                  // Border radius per mantenir l'estil
+                  borderRadius: '0.5rem',
+                  overflow: 'hidden'
                 }}
               >
-                {/* El mapa real dins del contenidor escalat */}
+                {/* Contenidor intern super-escalat per cobrir QUALSEVOL rotació */}
                 <div
-                  ref={mapRef}
+                  className="absolute"
                   style={{
-                    width: '100%',
-                    height: '100%',
-                    position: 'relative',
-                    borderRadius: '0.5rem' // Mantenir estil
+                    // Centrat perfecte
+                    top: '50%',
+                    left: '50%',
+                    
+                    // Mides molt grans per cobrir qualsevol cas
+                    width: '200%', // Molt més del necessari
+                    height: '200%',
+                    
+                    // Centrar amb transform
+                    transform: 'translate(-50%, -50%)',
+                    transformOrigin: 'center center',
+                    
+                    // Assegurar que no es roti mai
+                    willChange: 'transform', // Optimització CSS
+                    
+                    // Debug: fons semi-transparent per veure l'àrea
+                    backgroundColor: 'rgba(255,0,0,0.1)' // Vermell lleuger per debug
                   }}
-                />
+                >
+                  {/* El mapa real, forçat a ser rectangular i sense rotació */}
+                  <div
+                    ref={mapRef}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      position: 'relative',
+                      
+                      // FORÇAR que el mapa no es roti MAI
+                      transform: 'rotate(0deg) !important',
+                      transformOrigin: 'center center',
+                      
+                      // Assegurar que es comporta com un bloc normal
+                      display: 'block',
+                      
+                      // Corners arrodonits
+                      borderRadius: '0.5rem',
+                      overflow: 'hidden',
+                      
+                      // Fons de fallback
+                      backgroundColor: '#f0f0f3'
+                    }}
+                  />
+                </div>
               </div>
             </div>
             
@@ -402,13 +452,14 @@ const BikeGPSApp = () => {
               </div>
             )}
             
-            {/* Informació tècnica del fix */}
-            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
-              <div className="font-semibold text-yellow-800 mb-1">🔧 Solució mapa rotatiu:</div>
-              <div className="text-yellow-700">
-                • Contenidor extern: overflow hidden + mides fixes<br/>
-                • Contenidor intern: 150% width/height + centrat<br/>
-                • Mapa: 100% del contenidor intern escalat
+            {/* Informació tècnica del fix millorat */}
+            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs">
+              <div className="font-semibold text-red-800 mb-1">🛡️ Solució anti-rotació robusta:</div>
+              <div className="text-red-700">
+                • Contenidor extern: overflow hidden + fons fosc per debug<br/>
+                • Contenidor anti-rotació: transform rotate(0deg) !important<br/>
+                • Contenidor super-escalat: 200% width/height + centrat<br/>
+                • Mapa: Forçat a rotate(0deg) sempre + zoom màxim (18)
               </div>
             </div>
           </div>
