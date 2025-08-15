@@ -159,7 +159,7 @@ const BikeGPSApp = () => {
     return () => clearTimeout(timer);
   }, [mapRef.current, currentUser]); // Executar quan l'usuari es loggeja
 
-  // Forçar invalidateSize del mapa quan es renderitza (arregla problema mòbil)
+  // Forçar invalidateSize del mapa quan es renderitza + DESACTIVAR ROTACIONS
   useEffect(() => {
     const timer = setTimeout(() => {
       if (mapInstanceRef.current) {
@@ -167,30 +167,74 @@ const BikeGPSApp = () => {
         mapInstanceRef.current.invalidateSize();
         addDebugLog('🗺️ InvalidateSize executat');
         
-        // NOMÉS INTERCEPTAR ROTACIONS DEL CONTENIDOR PRINCIPAL
+        // DESACTIVAR QUALSEVOL FUNCIONALITAT DE ROTACIÓ DEL MAPA
         const mapContainer = mapInstanceRef.current.getContainer();
         if (mapContainer) {
-          // Funció per netejar només rotacions del contenidor principal
-          const cleanRotation = () => {
-            const currentTransform = mapContainer.style.transform;
-            if (currentTransform && currentTransform.includes('rotate')) {
-              // Mantenir tot excepte rotacions
-              const cleanTransform = currentTransform.replace(/rotate\([^)]*\)/g, '');
-              mapContainer.style.transform = cleanTransform;
-              addDebugLog('🔄 Rotació del contenidor eliminada');
+          // Guardar referència per poder interceptar calls
+          const originalSetView = mapInstanceRef.current.setView;
+          const originalFlyTo = mapInstanceRef.current.flyTo;
+          const originalPanTo = mapInstanceRef.current.panTo;
+          
+          // Interceptar mètodes que poden causar rotació
+          mapInstanceRef.current.setView = function(center, zoom, options = {}) {
+            // Eliminar qualsevol opció de rotació
+            const cleanOptions = { ...options };
+            delete cleanOptions.rotation;
+            delete cleanOptions.bearing;
+            delete cleanOptions.rotate;
+            
+            return originalSetView.call(this, center, zoom, cleanOptions);
+          };
+          
+          mapInstanceRef.current.flyTo = function(center, zoom, options = {}) {
+            const cleanOptions = { ...options };
+            delete cleanOptions.rotation;
+            delete cleanOptions.bearing;
+            delete cleanOptions.rotate;
+            
+            return originalFlyTo.call(this, center, zoom, cleanOptions);
+          };
+          
+          mapInstanceRef.current.panTo = function(center, options = {}) {
+            const cleanOptions = { ...options };
+            delete cleanOptions.rotation;
+            delete cleanOptions.bearing;
+            delete cleanOptions.rotate;
+            
+            return originalPanTo.call(this, center, cleanOptions);
+          };
+          
+          // Bloquejar rotacions en el contenidor amb override més agressiu
+          const blockRotations = () => {
+            // Aplicar directament al contenidor
+            mapContainer.style.setProperty('transform', 'none', 'important');
+            mapContainer.style.setProperty('-webkit-transform', 'none', 'important');
+            mapContainer.style.setProperty('-moz-transform', 'none', 'important');
+            
+            // També als pares si n'hi ha
+            let parent = mapContainer.parentElement;
+            while (parent && parent !== document.body) {
+              if (parent.style.transform && parent.style.transform.includes('rotate')) {
+                parent.style.setProperty('transform', 'none', 'important');
+              }
+              parent = parent.parentElement;
             }
           };
           
-          // Aplicar neteja cada segon
-          const rotationCleaner = setInterval(cleanRotation, 1000);
+          // Aplicar bloqueig cada 100ms (més ràpid que abans)
+          const rotationBlocker = setInterval(blockRotations, 100);
+          blockRotations(); // Aplicar immediatament
           
-          // Aplicar immediatament
-          cleanRotation();
+          addDebugLog('🚫 Mètodes de rotació interceptats i bloquejats');
           
-          addDebugLog('🧹 Netejador de rotacions activat cada 1s');
-          
-          // Cleanup al desmuntar
-          return () => clearInterval(rotationCleaner);
+          // Cleanup
+          return () => {
+            clearInterval(rotationBlocker);
+            // Restaurar mètodes originals
+            mapInstanceRef.current.setView = originalSetView;
+            mapInstanceRef.current.flyTo = originalFlyTo;
+            mapInstanceRef.current.panTo = originalPanTo;
+          };
         }
       } else {
         addDebugLog('❌ MapInstanceRef encara no disponible');
@@ -374,33 +418,50 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa restaurat amb protecció mínima */}
+          {/* Mapa amb contenidor escalat per cobrir rotacions */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
             
-            {/* Contenidor simple sense complicacions */}
+            {/* Contenidor extern que defineix l'àrea visible */}
             <div 
               className="w-full rounded-lg border border-gray-300 relative"
               style={{ 
                 height: '400px',
                 minHeight: '400px',
-                overflow: 'hidden',
+                overflow: 'hidden', // CLAU: Talla els espais que sobresurtin
                 position: 'relative',
                 borderRadius: '0.5rem',
                 backgroundColor: '#f0f0f3'
               }}
             >
-              {/* Mapa directe sense contenidors intermedis */}
+              {/* Contenidor intern escalat per cobrir rotacions residuals */}
               <div
-                ref={mapRef}
                 style={{
-                  width: '100%',
-                  height: '100%',
-                  position: 'relative',
-                  borderRadius: '0.5rem',
-                  overflow: 'hidden'
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  
+                  // Escalat per cobrir diagonals si hi ha rotacions residuals
+                  width: '142%', // √2 ≈ 1.414 per cobrir diagonals
+                  height: '142%',
+                  
+                  // Centrar amb transform
+                  transform: 'translate(-50%, -50%)',
+                  transformOrigin: 'center center'
                 }}
-              />
+              >
+                {/* Mapa dins del contenidor escalat */}
+                <div
+                  ref={mapRef}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative',
+                    borderRadius: '0.5rem',
+                    overflow: 'hidden'
+                  }}
+                />
+              </div>
             </div>
             
             <p className="text-sm text-gray-500 mt-2">
@@ -418,14 +479,14 @@ const BikeGPSApp = () => {
               </div>
             )}
             
-            {/* Solució més suau */}
-            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
-              <div className="font-semibold text-blue-800 mb-1">🔄 Protecció suau anti-rotació:</div>
-              <div className="text-blue-700">
-                • Estructura simple: Mapa directe sense contenidors complexos<br/>
-                • Netejador periòdic: Elimina rotacions del contenidor cada 1s<br/>
-                • Leaflet intact: Mantenim totes les funcionalitats del mapa<br/>
-                • Zoom màxim: 18 per veure detall del mapa
+            {/* Solució definitiva híbrida */}
+            <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs">
+              <div className="font-semibold text-purple-800 mb-1">⚡ Solució híbrida anti-rotació:</div>
+              <div className="text-purple-700">
+                • <strong>Intercepció de mètodes:</strong> Bloqueja setView/flyTo/panTo amb opcions de rotació<br/>
+                • <strong>Bloqueig CSS agressiu:</strong> transform: none !important cada 100ms<br/>
+                • <strong>Contenidor escalat:</strong> 142% per cobrir rotacions residuals<br/>
+                • <strong>Overflow hidden:</strong> Talla espais que sobresurtin del contenidor
               </div>
             </div>
           </div>
