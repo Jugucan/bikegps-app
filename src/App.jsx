@@ -167,45 +167,35 @@ const BikeGPSApp = () => {
         mapInstanceRef.current.invalidateSize();
         addDebugLog('🗺️ InvalidateSize executat');
         
-        // INTERCEPTAR I ANULAR ROTACIONS DEL MAPA
+        // NOMÉS INTERCEPTAR ROTACIONS DEL CONTENIDOR PRINCIPAL
         const mapContainer = mapInstanceRef.current.getContainer();
         if (mapContainer) {
-          // Observador de mutacions per detectar canvis de style
-          const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-              if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-                const element = mutation.target;
-                const currentTransform = element.style.transform;
-                
-                // Si detectem una rotació, l'eliminem immediatament
-                if (currentTransform && currentTransform.includes('rotate')) {
-                  addDebugLog('🚫 Rotació detectada i eliminada: ' + currentTransform);
-                  // Mantenir només les translacions i scales, eliminar rotacions
-                  const newTransform = currentTransform.replace(/rotate\([^)]*\)/g, '');
-                  element.style.transform = newTransform;
-                  addDebugLog('✅ Transform net: ' + newTransform);
-                }
-              }
-            });
-          });
+          // Funció per netejar només rotacions del contenidor principal
+          const cleanRotation = () => {
+            const currentTransform = mapContainer.style.transform;
+            if (currentTransform && currentTransform.includes('rotate')) {
+              // Mantenir tot excepte rotacions
+              const cleanTransform = currentTransform.replace(/rotate\([^)]*\)/g, '');
+              mapContainer.style.transform = cleanTransform;
+              addDebugLog('🔄 Rotació del contenidor eliminada');
+            }
+          };
           
-          // Observar el contenidor del mapa i tots els seus fills
-          observer.observe(mapContainer, { 
-            attributes: true, 
-            subtree: true, 
-            attributeFilter: ['style'] 
-          });
+          // Aplicar neteja cada segon
+          const rotationCleaner = setInterval(cleanRotation, 1000);
           
-          addDebugLog('👁️ Observer anti-rotació activat');
+          // Aplicar immediatament
+          cleanRotation();
           
-          // També aplicar directament
-          mapContainer.style.transform = 'none !important';
-          addDebugLog('🔒 Transform resetejat manualment');
+          addDebugLog('🧹 Netejador de rotacions activat cada 1s');
+          
+          // Cleanup al desmuntar
+          return () => clearInterval(rotationCleaner);
         }
       } else {
         addDebugLog('❌ MapInstanceRef encara no disponible');
       }
-    }, 1500); // Més temps per assegurar que el mapa existeix
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [mapInstanceRef.current]);
@@ -384,11 +374,11 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa amb protecció total anti-rotació */}
+          {/* Mapa restaurat amb protecció mínima */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
             
-            {/* Contenidor extern fixe */}
+            {/* Contenidor simple sense complicacions */}
             <div 
               className="w-full rounded-lg border border-gray-300 relative"
               style={{ 
@@ -397,55 +387,20 @@ const BikeGPSApp = () => {
                 overflow: 'hidden',
                 position: 'relative',
                 borderRadius: '0.5rem',
-                backgroundColor: '#f0f0f3' // Fons normal, no debug
+                backgroundColor: '#f0f0f3'
               }}
             >
-              {/* Contenidor del mapa amb protecció CSS total */}
+              {/* Mapa directe sense contenidors intermedis */}
               <div
-                className="absolute inset-0"
+                ref={mapRef}
                 style={{
-                  // Posició absoluta per omplir tot l'espai
-                  position: 'absolute',
-                  top: '0',
-                  left: '0',
                   width: '100%',
                   height: '100%',
-                  
-                  // Proteccions CSS agressives contra rotacions
-                  transform: 'none !important',
-                  transformOrigin: 'center center !important',
-                  
-                  // Border radius
+                  position: 'relative',
                   borderRadius: '0.5rem',
-                  overflow: 'hidden',
-                  
-                  // Z-index alt
-                  zIndex: 1
+                  overflow: 'hidden'
                 }}
-                id="map-container-protected"
-              >
-                {/* El mapa real amb classe CSS personalitzada */}
-                <div
-                  ref={mapRef}
-                  className="leaflet-no-rotate" // Classe CSS que crearem
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    position: 'relative',
-                    
-                    // Proteccions extremes
-                    transform: 'none !important',
-                    transformOrigin: 'center center !important',
-                    rotate: 'none !important',
-                    
-                    // Assegurar que es comporta normalment
-                    display: 'block',
-                    borderRadius: '0.5rem',
-                    overflow: 'hidden',
-                    backgroundColor: '#f0f0f3'
-                  }}
-                />
-              </div>
+              />
             </div>
             
             <p className="text-sm text-gray-500 mt-2">
@@ -463,55 +418,14 @@ const BikeGPSApp = () => {
               </div>
             )}
             
-            {/* CSS anti-rotació injectat */}
-            <style jsx>{`
-              .leaflet-no-rotate,
-              .leaflet-no-rotate *,
-              .leaflet-no-rotate .leaflet-map-pane,
-              .leaflet-no-rotate .leaflet-tile-pane,
-              .leaflet-no-rotate .leaflet-objects-pane {
-                transform: none !important;
-                -webkit-transform: none !important;
-                -moz-transform: none !important;
-                -ms-transform: none !important;
-                -o-transform: none !important;
-                rotate: none !important;
-                rotation: 0 !important;
-              }
-              
-              #map-container-protected {
-                transform: none !important;
-                -webkit-transform: none !important;
-                -moz-transform: none !important;
-                -ms-transform: none !important;
-                -o-transform: none !important;
-              }
-              
-              /* Forçar tots els elements de Leaflet */
-              .leaflet-container,
-              .leaflet-container *,
-              .leaflet-map-pane,
-              .leaflet-tile-pane,
-              .leaflet-objects-pane,
-              .leaflet-overlay-pane,
-              .leaflet-shadow-pane,
-              .leaflet-marker-pane,
-              .leaflet-tooltip-pane,
-              .leaflet-popup-pane {
-                transform: none !important;
-                -webkit-transform: none !important;
-                rotation: 0deg !important;
-              }
-            `}</style>
-            
-            {/* Informació tècnica del fix amb observer */}
-            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
-              <div className="font-semibold text-green-800 mb-1">🛡️ Protecció total anti-rotació:</div>
-              <div className="text-green-700">
-                • CSS globals: transform none !important a tots els elements Leaflet<br/>
-                • MutationObserver: Detecta i elimina rotacions en temps real<br/>
-                • Contenidor simplificat: Un sol nivell sense escalats complexos<br/>
-                • Zoom màxim: 18 per veure detall màxim del mapa
+            {/* Solució més suau */}
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+              <div className="font-semibold text-blue-800 mb-1">🔄 Protecció suau anti-rotació:</div>
+              <div className="text-blue-700">
+                • Estructura simple: Mapa directe sense contenidors complexos<br/>
+                • Netejador periòdic: Elimina rotacions del contenidor cada 1s<br/>
+                • Leaflet intact: Mantenim totes les funcionalitats del mapa<br/>
+                • Zoom màxim: 18 per veure detall del mapa
               </div>
             </div>
           </div>
