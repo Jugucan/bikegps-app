@@ -166,6 +166,42 @@ const BikeGPSApp = () => {
         addDebugLog('🗺️ Forçant invalidateSize per mòbil...');
         mapInstanceRef.current.invalidateSize();
         addDebugLog('🗺️ InvalidateSize executat');
+        
+        // INTERCEPTAR I ANULAR ROTACIONS DEL MAPA
+        const mapContainer = mapInstanceRef.current.getContainer();
+        if (mapContainer) {
+          // Observador de mutacions per detectar canvis de style
+          const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+              if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                const element = mutation.target;
+                const currentTransform = element.style.transform;
+                
+                // Si detectem una rotació, l'eliminem immediatament
+                if (currentTransform && currentTransform.includes('rotate')) {
+                  addDebugLog('🚫 Rotació detectada i eliminada: ' + currentTransform);
+                  // Mantenir només les translacions i scales, eliminar rotacions
+                  const newTransform = currentTransform.replace(/rotate\([^)]*\)/g, '');
+                  element.style.transform = newTransform;
+                  addDebugLog('✅ Transform net: ' + newTransform);
+                }
+              }
+            });
+          });
+          
+          // Observar el contenidor del mapa i tots els seus fills
+          observer.observe(mapContainer, { 
+            attributes: true, 
+            subtree: true, 
+            attributeFilter: ['style'] 
+          });
+          
+          addDebugLog('👁️ Observer anti-rotació activat');
+          
+          // També aplicar directament
+          mapContainer.style.transform = 'none !important';
+          addDebugLog('🔒 Transform resetejat manualment');
+        }
       } else {
         addDebugLog('❌ MapInstanceRef encara no disponible');
       }
@@ -348,92 +384,67 @@ const BikeGPSApp = () => {
             </div>
           </div>
           
-          {/* Mapa amb solució anti-rotació robusta */}
+          {/* Mapa amb protecció total anti-rotació */}
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-2">Mapa BikeGPS:</h3>
             
-            {/* Contenidor extern amb mides fixes i overflow hidden */}
+            {/* Contenidor extern fixe */}
             <div 
-              className="w-full rounded-lg border border-gray-300 bg-gray-900 relative"
+              className="w-full rounded-lg border border-gray-300 relative"
               style={{ 
                 height: '400px',
                 minHeight: '400px',
-                overflow: 'hidden', // CLAU: Talla tot el que surti
+                overflow: 'hidden',
                 position: 'relative',
                 borderRadius: '0.5rem',
-                // Fons fosc per veure millor els espais buits
-                backgroundColor: '#1a1a1a'
+                backgroundColor: '#f0f0f3' // Fons normal, no debug
               }}
             >
-              {/* Contenidor rotatiu que anula qualsevol rotació */}
+              {/* Contenidor del mapa amb protecció CSS total */}
               <div
-                className="absolute"
+                className="absolute inset-0"
                 style={{
-                  // Posicionament absolut que cobreix tot el contenidor
+                  // Posició absoluta per omplir tot l'espai
+                  position: 'absolute',
                   top: '0',
                   left: '0',
                   width: '100%',
                   height: '100%',
                   
-                  // FORÇAR rotació 0 sempre per anular rotacions dels hooks
-                  transform: 'rotate(0deg) !important',
-                  transformOrigin: 'center center',
+                  // Proteccions CSS agressives contra rotacions
+                  transform: 'none !important',
+                  transformOrigin: 'center center !important',
                   
-                  // Z-index alt per assegurar que està al damunt
-                  zIndex: 10,
-                  
-                  // Border radius per mantenir l'estil
+                  // Border radius
                   borderRadius: '0.5rem',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
+                  
+                  // Z-index alt
+                  zIndex: 1
                 }}
+                id="map-container-protected"
               >
-                {/* Contenidor intern super-escalat per cobrir QUALSEVOL rotació */}
+                {/* El mapa real amb classe CSS personalitzada */}
                 <div
-                  className="absolute"
+                  ref={mapRef}
+                  className="leaflet-no-rotate" // Classe CSS que crearem
                   style={{
-                    // Centrat perfecte
-                    top: '50%',
-                    left: '50%',
+                    width: '100%',
+                    height: '100%',
+                    position: 'relative',
                     
-                    // Mides molt grans per cobrir qualsevol cas
-                    width: '200%', // Molt més del necessari
-                    height: '200%',
+                    // Proteccions extremes
+                    transform: 'none !important',
+                    transformOrigin: 'center center !important',
+                    rotate: 'none !important',
                     
-                    // Centrar amb transform
-                    transform: 'translate(-50%, -50%)',
-                    transformOrigin: 'center center',
-                    
-                    // Assegurar que no es roti mai
-                    willChange: 'transform', // Optimització CSS
-                    
-                    // Debug: fons semi-transparent per veure l'àrea
-                    backgroundColor: 'rgba(255,0,0,0.1)' // Vermell lleuger per debug
+                    // Assegurar que es comporta normalment
+                    display: 'block',
+                    borderRadius: '0.5rem',
+                    overflow: 'hidden',
+                    backgroundColor: '#f0f0f3'
                   }}
-                >
-                  {/* El mapa real, forçat a ser rectangular i sense rotació */}
-                  <div
-                    ref={mapRef}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      position: 'relative',
-                      
-                      // FORÇAR que el mapa no es roti MAI
-                      transform: 'rotate(0deg) !important',
-                      transformOrigin: 'center center',
-                      
-                      // Assegurar que es comporta com un bloc normal
-                      display: 'block',
-                      
-                      // Corners arrodonits
-                      borderRadius: '0.5rem',
-                      overflow: 'hidden',
-                      
-                      // Fons de fallback
-                      backgroundColor: '#f0f0f3'
-                    }}
-                  />
-                </div>
+                />
               </div>
             </div>
             
@@ -452,14 +463,55 @@ const BikeGPSApp = () => {
               </div>
             )}
             
-            {/* Informació tècnica del fix millorat */}
-            <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs">
-              <div className="font-semibold text-red-800 mb-1">🛡️ Solució anti-rotació robusta:</div>
-              <div className="text-red-700">
-                • Contenidor extern: overflow hidden + fons fosc per debug<br/>
-                • Contenidor anti-rotació: transform rotate(0deg) !important<br/>
-                • Contenidor super-escalat: 200% width/height + centrat<br/>
-                • Mapa: Forçat a rotate(0deg) sempre + zoom màxim (18)
+            {/* CSS anti-rotació injectat */}
+            <style jsx>{`
+              .leaflet-no-rotate,
+              .leaflet-no-rotate *,
+              .leaflet-no-rotate .leaflet-map-pane,
+              .leaflet-no-rotate .leaflet-tile-pane,
+              .leaflet-no-rotate .leaflet-objects-pane {
+                transform: none !important;
+                -webkit-transform: none !important;
+                -moz-transform: none !important;
+                -ms-transform: none !important;
+                -o-transform: none !important;
+                rotate: none !important;
+                rotation: 0 !important;
+              }
+              
+              #map-container-protected {
+                transform: none !important;
+                -webkit-transform: none !important;
+                -moz-transform: none !important;
+                -ms-transform: none !important;
+                -o-transform: none !important;
+              }
+              
+              /* Forçar tots els elements de Leaflet */
+              .leaflet-container,
+              .leaflet-container *,
+              .leaflet-map-pane,
+              .leaflet-tile-pane,
+              .leaflet-objects-pane,
+              .leaflet-overlay-pane,
+              .leaflet-shadow-pane,
+              .leaflet-marker-pane,
+              .leaflet-tooltip-pane,
+              .leaflet-popup-pane {
+                transform: none !important;
+                -webkit-transform: none !important;
+                rotation: 0deg !important;
+              }
+            `}</style>
+            
+            {/* Informació tècnica del fix amb observer */}
+            <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+              <div className="font-semibold text-green-800 mb-1">🛡️ Protecció total anti-rotació:</div>
+              <div className="text-green-700">
+                • CSS globals: transform none !important a tots els elements Leaflet<br/>
+                • MutationObserver: Detecta i elimina rotacions en temps real<br/>
+                • Contenidor simplificat: Un sol nivell sense escalats complexos<br/>
+                • Zoom màxim: 18 per veure detall màxim del mapa
               </div>
             </div>
           </div>
