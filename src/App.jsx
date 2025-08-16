@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import 'leaflet/dist/leaflet.css';
 
 // Firebase imports
 import { initializeApp } from 'firebase/app';
