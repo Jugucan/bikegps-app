@@ -24,6 +24,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
   const routesListenerRef = useRef(null);
   const usersListenerRef = useRef(null);
   const incidentsListenerRef = useRef(null);
+  const userMarkersRef = useRef(new Map()); // Mapa per gestionar marcadors d'usuaris
 
   // Funció per carregar tots els usuaris (només super admin)
   const loadAllUsers = async () => {
@@ -55,8 +56,6 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         createdAt: serverTimestamp()
       });
       console.log('✅ Usuari fet admin correctament');
-      
-      // Recarregar usuaris
       loadAllUsers();
     } catch (error) {
       console.error('❌ Error fent admin:', error);
@@ -97,9 +96,62 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     }
   };
 
+  // Funció per gestionar marcadors d'usuaris
+  const manageUserMarker = (userData) => {
+    if (!mapInstanceRef?.current || !userData.location) return;
+    
+    const L = window.L;
+    if (!L) return;
+
+    const userId = userData.uid;
+    const existingMarker = userMarkersRef.current.get(userId);
+
+    if (existingMarker) {
+      // Actualitzar posició del marcador existent
+      existingMarker.setLatLng([userData.location.latitude, userData.location.longitude]);
+      existingMarker.setPopupContent(`👤 ${userData.displayName || 'Usuari'} (Online)`);
+    } else {
+      // Crear nou marcador
+      try {
+        const marker = L.marker([userData.location.latitude, userData.location.longitude], {
+          icon: L.divIcon({
+            className: 'user-marker',
+            html: `<div style="background: #4CAF50; border: 2px solid white; border-radius: 50%; width: 12px; height: 12px;"></div>`,
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+          })
+        })
+          .addTo(mapInstanceRef.current)
+          .bindPopup(`👤 ${userData.displayName || 'Usuari'} (Online)`);
+        
+        userMarkersRef.current.set(userId, marker);
+        console.log(`📍 Marcador creat per ${userData.displayName || userData.uid}`);
+      } catch (error) {
+        console.warn('⚠️ Error creant marcador:', error);
+      }
+    }
+  };
+
+  // Funció per eliminar marcador d'usuari
+  const removeUserMarker = (userId) => {
+    const marker = userMarkersRef.current.get(userId);
+    if (marker && mapInstanceRef?.current) {
+      mapInstanceRef.current.removeLayer(marker);
+      userMarkersRef.current.delete(userId);
+      console.log(`🗑️ Marcador eliminat per usuari ${userId}`);
+    }
+  };
+
   // Listener per usuaris connectats
   useEffect(() => {
     if (!currentUser) {
+      // Netejar marcadors quan no hi ha usuari
+      userMarkersRef.current.forEach((marker, userId) => {
+        if (mapInstanceRef?.current) {
+          mapInstanceRef.current.removeLayer(marker);
+        }
+      });
+      userMarkersRef.current.clear();
       setUsers([]);
       return;
     }
@@ -108,59 +160,44 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     
     const usersQuery = collection(db, 'userLocations');
     
-    const unsubscribe = onSnapshot(usersQuery, async (snapshot) => {
+    const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
       try {
-        const usersData = await Promise.all(
-          snapshot.docs.map(async (docSnap) => {
-            const userData = docSnap.data();
+        const usersData = [];
+        const currentActiveUserIds = new Set();
+
+        snapshot.docs.forEach((docSnap) => {
+          const userData = docSnap.data();
+          
+          // Verificar si l'usuari està online i no és l'usuari actual
+          if (userData.isOnline && 
+              userData.uid !== currentUser.uid && 
+              userData.location &&
+              userData.lastUpdated) {
             
-            // Verificar si el mapa està disponible abans d'intentar crear marcadors
-            if (mapInstanceRef?.current && userData.location) {
-              try {
-                // Crear o actualitzar marcador d'usuari si no existeix
-                if (!userData.mapMarker) {
-                  const L = window.L;
-                  if (L && userData.location.latitude && userData.location.longitude) {
-                    const marker = L.marker([userData.location.latitude, userData.location.longitude])
-                      .addTo(mapInstanceRef.current)
-                      .bindPopup(`👤 ${userData.displayName || 'Usuari'}`);
-                    
-                    // CORRECCIÓ: Assignar el marcador a l'objecte userData en lloc d'undefined
-                    userData.mapMarker = marker;
-                    console.log(`📍 Marcador creat per ${userData.displayName}`);
-                  }
-                } else {
-                  // Actualitzar posició del marcador existent
-                  if (userData.mapMarker && userData.location.latitude && userData.location.longitude) {
-                    userData.mapMarker.setLatLng([userData.location.latitude, userData.location.longitude]);
-                  }
-                }
-              } catch (markerError) {
-                console.warn('⚠️ Error creant/actualitzant marcador:', markerError);
-              }
-            }
-            
-            return {
+            usersData.push({
               id: docSnap.id,
-              ...userData,
-              // Filtrar propietats que no es poden serialitzar
-              mapMarker: undefined
-            };
-          })
-        );
+              ...userData
+            });
+            
+            currentActiveUserIds.add(userData.uid);
+            
+            // Gestionar marcador d'usuari
+            manageUserMarker(userData);
+          }
+        });
+
+        // Eliminar marcadors d'usuaris que ja no estan actius
+        userMarkersRef.current.forEach((marker, userId) => {
+          if (!currentActiveUserIds.has(userId)) {
+            removeUserMarker(userId);
+          }
+        });
         
-        // Filtrar usuaris online i diferents de l'usuari actual
-        const activeUsers = usersData.filter(user => 
-          user.isOnline && 
-          user.uid !== currentUser.uid &&
-          user.lastUpdated // Assegurar que tenen timestamp recent
-        );
-        
-        setUsers(activeUsers);
-        console.log(`👥 ${activeUsers.length} usuaris actius trobats`);
+        setUsers(usersData);
+        console.log(`👥 ${usersData.length} usuaris actius trobats`);
         
       } catch (error) {
-        console.error('Error processant usuari:', error);
+        console.error('❌ Error processant usuaris:', error);
       }
     }, (error) => {
       console.error('❌ Error listener usuaris:', error);
@@ -200,14 +237,26 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         setIncidents(incidentsData);
         console.log(`🚨 ${incidentsData.length} incidències carregades`);
         
-        // Notificar noves incidències no resoltes
-        const newUnresolvedIncidents = incidentsData.filter(incident => 
-          !incident.resolved && 
-          incident.timestamp?.toDate?.() > new Date(Date.now() - 60000) // Últim minut
-        );
-        
-        if (newUnresolvedIncidents.length > 0) {
-          console.log(`🚨 ${newUnresolvedIncidents.length} noves incidències!`);
+        // Afegir marcadors d'incidències al mapa
+        if (mapInstanceRef?.current && window.L) {
+          incidentsData.forEach(incident => {
+            if (incident.location && !incident.resolved) {
+              try {
+                const marker = window.L.marker([incident.location.latitude, incident.location.longitude], {
+                  icon: window.L.divIcon({
+                    className: 'incident-marker',
+                    html: `<div style="background: #FF5722; border: 2px solid white; border-radius: 50%; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; color: white; font-size: 10px;">!</div>`,
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8]
+                  })
+                })
+                  .addTo(mapInstanceRef.current)
+                  .bindPopup(`🚨 Incidència: ${incident.message}<br>📅 ${incident.timestamp?.toDate?.()?.toLocaleString()}`);
+              } catch (error) {
+                console.warn('⚠️ Error creant marcador incidència:', error);
+              }
+            }
+          });
         }
         
       } catch (error) {
@@ -225,9 +274,9 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         incidentsListenerRef.current = null;
       }
     };
-  }, [isAdmin]);
+  }, [isAdmin, mapInstanceRef]);
 
-  // Listener per rutes
+  // Listener per rutes - SIMPLIFICAT per evitar l'error d'índex
   useEffect(() => {
     if (!currentUser) {
       setRoutes([]);
@@ -236,18 +285,24 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
 
     console.log('📚 INICIANT LISTENER PER RUTES...');
     
+    // Query simplificat sense orderBy per evitar l'error d'índex
     const routesQuery = query(
       collection(db, 'routes'),
-      where('deleted', '==', false),
-      orderBy('createdAt', 'desc')
+      where('deleted', '==', false)
     );
     
     const unsubscribe = onSnapshot(routesQuery, (snapshot) => {
       try {
-        const routesData = snapshot.docs.map(doc => ({
+        let routesData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
+        
+        // Ordenar manualment per createdAt
+        routesData = routesData.sort((a, b) => {
+          if (!a.createdAt || !b.createdAt) return 0;
+          return b.createdAt.toDate() - a.createdAt.toDate();
+        });
         
         setRoutes(routesData);
         console.log(`📚 ${routesData.length} rutes carregades`);
@@ -289,6 +344,14 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
       if (incidentsListenerRef.current) {
         incidentsListenerRef.current();
       }
+      
+      // Netejar marcadors d'usuaris
+      if (mapInstanceRef?.current) {
+        userMarkersRef.current.forEach((marker) => {
+          mapInstanceRef.current.removeLayer(marker);
+        });
+      }
+      userMarkersRef.current.clear();
     };
   }, []);
 
