@@ -9,6 +9,8 @@ import { getFirestore, collection, addDoc, serverTimestamp } from 'firebase/fire
 // Components
 import AuthScreen from './components/AuthScreen';
 import BikeMap from './components/BikeMap';
+import AdminDashboard from './components/AdminDashboard';
+import UserDashboard from './components/UserDashboard';
 
 // Hooks
 import { useAuth } from './hooks/useAuth';
@@ -72,6 +74,9 @@ const BikeGPSApp = () => {
     routes,
     users,
     incidents,
+    allUsers,
+    loadAllUsers,
+    makeUserAdmin,
     deleteRoute,
     resolveIncident
   } = useFirebaseListeners(currentUser, isAdmin, isSuperAdmin, mapInstanceRef);
@@ -82,6 +87,7 @@ const BikeGPSApp = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [followUser, setFollowUser] = useState(true);
+  const [rotateMap, setRotateMap] = useState(true); // Nova opció
   const [mapControlsExpanded, setMapControlsExpanded] = useState(false);
 
   // Initialize location tracking when user logs in
@@ -223,137 +229,51 @@ const BikeGPSApp = () => {
     );
   }
 
-  // Main app interface (versió temporal millorada)
+  // Admin dashboard
+  if (isAdmin) {
+    return (
+      <AdminDashboard
+        currentUser={currentUser}
+        isSuperAdmin={isSuperAdmin}
+        routes={routes}
+        users={users}
+        incidents={incidents}
+        allUsers={allUsers}
+        currentRoute={currentRoute}
+        showUploadProgress={showUploadProgress}
+        uploadProgress={uploadProgress}
+        handleCreateRoute={handleCreateRoute}
+        selectRoute={selectRoute}
+        deleteRoute={deleteRoute}
+        resolveIncident={resolveIncident}
+        loadAllUsers={loadAllUsers}
+        makeUserAdmin={makeUserAdmin}
+        handleLogout={handleLogout}
+        mapInstanceRef={mapInstanceRef}
+        userLocation={userLocation}
+        notification={notification}
+      />
+    );
+  }
+
+  // User dashboard
   return (
-    <div className="min-h-screen" style={{background: '#f0f0f3'}}>
-      <div className="container mx-auto px-4 py-4 max-w-4xl">
-        
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <div className="flex justify-between items-center">
-            <h1 className="text-xl md:text-2xl font-bold">
-              <span style={{color: '#ffd02e'}}>Bike</span>
-              <span style={{color: '#1a1a1a'}}>GPS</span>
-            </h1>
-            
-            <div className="flex items-center gap-2">
-              {/* Status de tracking */}
-              <div className={`w-3 h-3 rounded-full ${isTracking ? 'bg-green-400' : 'bg-gray-400'}`} 
-                   title={isTracking ? 'GPS actiu' : 'GPS inactiu'}>
-              </div>
-              
-              <button
-                onClick={handleLogout}
-                className="px-3 py-1 md:px-4 md:py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
-              >
-                Sortir
-              </button>
-            </div>
-          </div>
-          
-          {/* User info */}
-          <div className="mt-2 text-sm text-gray-600">
-            Benvingut/da, {currentUser.email} 
-            {isAdmin && <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Admin</span>}
-            {locationError && <span className="ml-2 text-red-500">⚠ {locationError}</span>}
-          </div>
-        </div>
-
-        {/* Map Container */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-lg font-semibold">Mapa BikeGPS</h2>
-            
-            {/* Map controls */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setFollowUser(!followUser)}
-                className={`p-2 rounded-lg text-sm transition-colors ${
-                  followUser 
-                    ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-                    : 'bg-gray-100 text-gray-600 border border-gray-300'
-                }`}
-                title={followUser ? 'Desactivar seguiment' : 'Activar seguiment'}
-              >
-                {followUser ? '📍' : '📍'}
-              </button>
-              
-              <button
-                onClick={() => setMapControlsExpanded(!mapControlsExpanded)}
-                className="p-2 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-colors"
-              >
-                ⚙️
-              </button>
-            </div>
-          </div>
-          
-          {/* Expanded map controls */}
-          {mapControlsExpanded && (
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-                <div>
-                  <strong>Ubicació:</strong><br/>
-                  {userLocation ? (
-                    <>
-                      {userLocation.latitude.toFixed(6)}, {userLocation.longitude.toFixed(6)}<br/>
-                      <span className="text-gray-500">±{Math.round(userLocation.accuracy)}m</span>
-                      {userLocation.heading && (
-                        <span className="text-blue-600"> →{Math.round(userLocation.heading)}°</span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-gray-400">Cercant...</span>
-                  )}
-                </div>
-                
-                <div>
-                  <strong>Ruta activa:</strong><br/>
-                  {currentRoute ? (
-                    <>
-                      {currentRoute.name}<br/>
-                      <span className="text-gray-500">{currentRoute.coordinates?.length || 0} punts</span>
-                    </>
-                  ) : (
-                    <span className="text-gray-400">Cap ruta seleccionada</span>
-                  )}
-                </div>
-                
-                <div>
-                  <strong>Estat:</strong><br/>
-                  <span className={isTracking ? 'text-green-600' : 'text-red-600'}>
-                    GPS {isTracking ? 'actiu' : 'inactiu'}
-                  </span><br/>
-                  <span className={followUser ? 'text-blue-600' : 'text-gray-500'}>
-                    Seguiment {followUser ? 'activat' : 'desactivat'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* BikeMap Component */}
-          <BikeMap
-            mapInstanceRef={mapInstanceRef}
-            currentRoute={currentRoute}
-            userLocation={userLocation}
-            followUser={followUser}
-            showUserDirection={true}
-            mapHeight="400px"
-          />
-        </div>
-
-        {/* Routes section */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
-          <h2 className="text-lg font-semibold mb-3">Rutes disponibles</h2>
-          
-          {routes.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No hi ha rutes disponibles</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {routes.map((route) => (
-                <div key={route.id} className="border border-gray-200 rounded-lg p-3 hover:border-blue-300 transition-colors">
-                  <h3 className="font-medium mb-1">{route.name}</h3>
-                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">{route.description}</p>
+    <UserDashboard
+      currentUser={currentUser}
+      routes={routes}
+      users={users}
+      incidents={incidents}
+      currentRoute={currentRoute}
+      routeProgress={routeProgress}
+      isReturning={isReturning}
+      selectRoute={selectRoute}
+      reportIncident={reportIncident}
+      handleLogout={handleLogout}
+      mapInstanceRef={mapInstanceRef}
+      userLocation={userLocation}
+      notification={notification}
+    />
+  );route.description}</p>
                   <div className="text-xs text-gray-500 mb-3">
                     {route.pointsCount} punts • {route.gpxFileName}
                   </div>
