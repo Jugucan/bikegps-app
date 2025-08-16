@@ -1,116 +1,17 @@
-@import 'tailwindcss/base';
-@import 'tailwindcss/components';
-@import 'tailwindcss/utilities';
+@import 'leaflet/dist/leaflet.css';
 
-/* Leaflet CSS via CDN en el HTML */
-
-:root {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  
-  --primary-yellow: #ffd02e;
-  --black: #1a1a1a;
-  --white: #ffffff;
-  --gray: #333333;
-  --light-gray: #f0f0f3;
-  --dark-gray: #e4e4e7;
-  --shadow-light: #ffffff;
-  --shadow-dark: #d1d1d4;
-  --bg-neumorphic: #f0f0f3;
-  --danger: #ff4757;
-  --success: #2ed573;
-  --route-pending: #81C784;
-  --route-completed: #1565C0;
-
-  color-scheme: light;
-  color: var(--black);
-  background-color: var(--bg-neumorphic);
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-  background: var(--bg-neumorphic);
-}
-
-#root {
-  width: 100%;
-  min-height: 100vh;
-}
-
-/* Custom marker animations */
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-.custom-incident-marker {
-  animation: pulse 2s infinite;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--light-gray);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--primary-yellow);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #e6b800;
-}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import 'leaflet/dist/leaflet.css';
-
 :root {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  
-  --primary-yellow: #ffd02e;
-  --black: #1a1a1a;
-  --white: #ffffff;
-  --gray: #333333;
-  --light-gray: #f0f0f3;
-  --dark-gray: #e4e4e7;
-  --shadow-light: #ffffff;
-  --shadow-dark: #d1d1d4;
-  --bg-neumorphic: #f0f0f3;
-  --danger: #ff4757;
-  --success: #2ed573;
-  --route-pending: #81C784;
-  --route-completed: #1565C0;
 
-  color-scheme: light;
-  color: var(--black);
-  background-color: var(--bg-neumorphic);
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #242424;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -119,10 +20,13 @@ body {
   -webkit-text-size-adjust: 100%;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
 }
 
 body {
@@ -131,79 +35,47 @@ body {
   place-items: center;
   min-width: 320px;
   min-height: 100vh;
-  background: var(--bg-neumorphic);
 }
 
 #root {
-  width: 100%;
-  min-height: 100vh;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
 }
 
-/* Neumorphic styles */
-.neumorphic {
-  background: var(--bg-neumorphic);
-  box-shadow: 8px 8px 16px var(--shadow-dark), 
-              -8px -8px 16px var(--shadow-light);
-  border-radius: 16px;
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.react:hover {
+  filter: drop-shadow(0 0 2em #61dafbaa);
 }
 
-.neumorphic-inset {
-  background: var(--bg-neumorphic);
-  box-shadow: inset 4px 4px 8px var(--shadow-dark), 
-              inset -4px -4px 8px var(--shadow-light);
-  border-radius: 12px;
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-.neumorphic-button {
-  background: var(--bg-neumorphic);
-  box-shadow: 4px 4px 8px var(--shadow-dark), 
-              -4px -4px 8px var(--shadow-light);
-  border: none;
-  border-radius: 12px;
-  transition: all 0.2s ease;
+@media (prefers-reduced-motion: no-preference) {
+  a:nth-of-type(2) .logo {
+    animation: logo-spin infinite 20s linear;
+  }
 }
 
-.neumorphic-button:hover {
-  box-shadow: 6px 6px 12px var(--shadow-dark), 
-              -6px -6px 12px var(--shadow-light);
+.card {
+  padding: 2em;
 }
 
-.neumorphic-button:active {
-  box-shadow: inset 2px 2px 4px var(--shadow-dark), 
-              inset -2px -2px 4px var(--shadow-light);
-}
-
-/* Leaflet overrides */
-.leaflet-container {
-  font-family: inherit;
-}
-
-/* Custom marker animations */
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-.custom-incident-marker {
-  animation: pulse 2s infinite;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--light-gray);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--primary-yellow);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #e6b800;
+.read-the-docs {
+  color: #888;
 }
