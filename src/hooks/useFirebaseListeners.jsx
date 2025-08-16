@@ -288,7 +288,8 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     // Query simplificat sense orderBy per evitar l'error d'índex
     const routesQuery = query(
       collection(db, 'routes'),
-      where('deleted', '==', false)
+      where('deleted', '==', false),
+      orderBy('createdAt', 'desc')
     );
     
     const unsubscribe = onSnapshot(routesQuery, (snapshot) => {
@@ -366,3 +367,4 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     resolveIncident
   };
 };
+
