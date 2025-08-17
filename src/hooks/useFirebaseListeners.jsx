@@ -10,7 +10,8 @@ import {
   deleteDoc, 
   getDocs,
   setDoc,
-  serverTimestamp
+  serverTimestamp,
+  limit
 } from 'firebase/firestore';
 import { db } from '../App';
 
@@ -52,17 +53,41 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
   };
 
   // Funcio per refrescar dades
-  const refreshData = () => {
-    console.log('🔄 Forçant refresh de tots els listeners...');
+  const refreshData = async () => {
+    console.log('🔄 Forçant refresh manual de dades...');
     
-    // Re-executar listeners si existeixen
-    if (currentUser) {
-      // Trigger re-execution of useEffects
-      setRoutes(prev => [...prev]);
-      setUsers(prev => [...prev]);
-      if (isAdmin) {
-        setIncidents(prev => [...prev]);
+    try {
+      // Refrescar usuaris manualment
+      if (currentUser) {
+        const userLocationsSnapshot = await getDocs(collection(db, 'userLocations'));
+        const usersData = [];
+        
+        userLocationsSnapshot.docs.forEach((docSnap) => {
+          const userData = docSnap.data();
+          
+          if (userData.isOnline && 
+              userData.uid !== currentUser.uid && 
+              userData.location &&
+              userData.lastUpdated) {
+            
+            const lastUpdate = userData.lastUpdated.toDate();
+            const now = new Date();
+            const diffMinutes = (now - lastUpdate) / (1000 * 60);
+            
+            if (diffMinutes <= 5) {
+              usersData.push({
+                id: docSnap.id,
+                ...userData
+              });
+            }
+          }
+        });
+        
+        setUsers(usersData);
+        console.log(`🔄 Refresh manual: ${usersData.length} usuaris carregats`);
       }
+    } catch (error) {
+      console.error('❌ Error en refresh manual:', error);
     }
   };
 
@@ -149,55 +174,40 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     // Si existeix, actualitzar posicio
     if (existingMarker) {
       existingMarker.setLatLng([userData.location.latitude, userData.location.longitude]);
-      existingMarker.setPopupContent(
-        `👤 ${userData.displayName || userData.email || 'Usuari'}<br>` +
-        `🕒 ${new Date().toLocaleTimeString()}<br>` +
-        `📍 Online`
-      );
       return;
     }
 
-    // Crear nou marcador
+    // Crear nou marcador amb estil simple
     try {
       const marker = L.marker([userData.location.latitude, userData.location.longitude], {
         icon: L.divIcon({
-          className: 'user-marker-online',
+          className: 'simple-user-marker',
           html: `
-            <div class="user-marker-wrapper">
-              <div class="user-marker-inner">
-                <div class="user-marker-pulse"></div>
-                <div class="user-marker-dot"></div>
-              </div>
-              <div class="user-marker-label">${(userData.displayName || userData.email || 'Usuari').substring(0, 10)}</div>
-            </div>
+            <div style="
+              width: 16px; 
+              height: 16px; 
+              background: #4CAF50; 
+              border: 2px solid white; 
+              border-radius: 50%; 
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            "></div>
           `,
-          iconSize: [40, 50],
-          iconAnchor: [20, 45]
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
         })
       });
 
       marker.bindPopup(
         `👤 ${userData.displayName || userData.email || 'Usuari'}<br>` +
-        `🕒 ${new Date().toLocaleTimeString()}<br>` +
         `📍 Online`
       );
 
       markerLayerGroupRef.current.addLayer(marker);
       userMarkersRef.current.set(userId, marker);
       
-      console.log(`📍 Marcador creat per ${userData.displayName || userData.email || userData.uid}`);
+      console.log(`📍 Marcador simple creat per ${userData.displayName || userData.email || userData.uid}`);
     } catch (error) {
       console.warn('⚠️ Error creant marcador usuari:', error);
-    }
-  };
-
-  // Funcio per eliminar marcador d'usuari
-  const removeUserMarker = (userId) => {
-    const marker = userMarkersRef.current.get(userId);
-    if (marker && markerLayerGroupRef.current) {
-      markerLayerGroupRef.current.removeLayer(marker);
-      userMarkersRef.current.delete(userId);
-      console.log(`🗑️ Marcador eliminat per usuari ${userId}`);
     }
   };
 
@@ -214,21 +224,30 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     });
     incidentMarkersRef.current.clear();
 
-    // Afegir marcadors d'incidencies actives
+    // Afegir marcadors d'incidencies actives amb estil simple
     incidentsData.forEach(incident => {
       if (incident.location && !incident.resolved) {
         try {
           const marker = L.marker([incident.location.latitude, incident.location.longitude], {
             icon: L.divIcon({
-              className: 'incident-marker',
+              className: 'simple-incident-marker',
               html: `
-                <div class="incident-marker-wrapper">
-                  <div class="incident-marker-pulse"></div>
-                  <div class="incident-marker-icon">⚠️</div>
-                </div>
+                <div style="
+                  width: 18px; 
+                  height: 18px; 
+                  background: #FF5722; 
+                  border: 2px solid white; 
+                  border-radius: 50%; 
+                  display: flex; 
+                  align-items: center; 
+                  justify-content: center; 
+                  font-size: 10px; 
+                  color: white;
+                  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                ">⚠</div>
               `,
-              iconSize: [30, 30],
-              iconAnchor: [15, 15]
+              iconSize: [22, 22],
+              iconAnchor: [11, 11]
             })
           });
 
@@ -256,13 +275,13 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     if (mapInstanceRef?.current && !markerLayerGroupRef.current) {
       const timer = setTimeout(() => {
         initializeMarkerLayer();
-      }, 500); // Petit delay per assegurar que el mapa esta completament carregat
+      }, 500);
       
       return () => clearTimeout(timer);
     }
   }, [mapInstanceRef]);
 
-  // Listener per usuaris connectats
+  // Listener per usuaris connectats - VERSIÓ SIMPLIFICADA SENSE ORDERBY
   useEffect(() => {
     if (!currentUser) {
       clearAllMarkers();
@@ -270,39 +289,36 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
       return;
     }
 
-    console.log('👂 INICIANT LISTENER PER USUARIS...');
+    console.log('👂 INICIANT LISTENER SIMPLIFICAT PER USUARIS...');
     
+    // Query més simple sense orderBy per evitar problemes d'índex
     const usersQuery = query(
       collection(db, 'userLocations'),
       where('isOnline', '==', true),
-      orderBy('lastUpdated', 'desc')
+      limit(50) // Limitem per rendiment
     );
     
     const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
       try {
         const usersData = [];
-        const currentActiveUserIds = new Set();
 
         snapshot.docs.forEach((docSnap) => {
           const userData = docSnap.data();
           
-          // Verificar si l'usuari esta online i no es l'usuari actual
           if (userData.uid !== currentUser.uid && 
               userData.location &&
               userData.lastUpdated) {
             
-            // Verificar que l'usuari hagi estat actiu en els ultims 5 minuts
+            // Verificar activitat recent
             const lastUpdate = userData.lastUpdated.toDate();
             const now = new Date();
             const diffMinutes = (now - lastUpdate) / (1000 * 60);
             
-            if (diffMinutes <= 5) {
+            if (diffMinutes <= 10) { // Ampliem a 10 minuts
               usersData.push({
                 id: docSnap.id,
                 ...userData
               });
-              
-              currentActiveUserIds.add(userData.uid);
               
               // Gestionar marcador d'usuari
               if (markerLayerGroupRef.current) {
@@ -311,22 +327,19 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
             }
           }
         });
-
-        // Eliminar marcadors d'usuaris que ja no estan actius
-        userMarkersRef.current.forEach((marker, userId) => {
-          if (!currentActiveUserIds.has(userId)) {
-            removeUserMarker(userId);
-          }
-        });
         
         setUsers(usersData);
-        console.log(`👥 ${usersData.length} usuaris actius trobats`);
+        console.log(`👥 ${usersData.length} usuaris actius trobats (simplificat)`);
         
       } catch (error) {
         console.error('❌ Error processant usuaris:', error);
       }
     }, (error) => {
       console.error('❌ Error listener usuaris:', error);
+      console.log('🔄 Intentant fallback manual...');
+      
+      // Fallback manual
+      refreshData();
     });
 
     usersListenerRef.current = unsubscribe;
@@ -339,36 +352,36 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     };
   }, [currentUser, mapInstanceRef]);
 
-  // Listener per incidencies (nomes admins)
+  // Listener per incidencies - VERSIÓ SIMPLIFICADA
   useEffect(() => {
-    if (!isAdmin) {
+    if (!currentUser) { // Canviat de !isAdmin a !currentUser
       setIncidents([]);
-      // Netejar marcadors d'incidencies si no es admin
-      incidentMarkersRef.current.forEach((marker, incidentId) => {
-        if (markerLayerGroupRef.current) {
-          markerLayerGroupRef.current.removeLayer(marker);
-        }
-      });
-      incidentMarkersRef.current.clear();
       return;
     }
 
-    console.log('🚨 INICIANT LISTENER PER INCIDENCIES...');
+    console.log('🚨 INICIANT LISTENER SIMPLIFICAT PER INCIDENCIES...');
     
+    // Query simple sense orderBy
     const incidentsQuery = query(
       collection(db, 'incidents'),
-      orderBy('timestamp', 'desc')
+      limit(20) // Limitem per rendiment
     );
     
     const unsubscribe = onSnapshot(incidentsQuery, (snapshot) => {
       try {
-        const incidentsData = snapshot.docs.map(doc => ({
+        let incidentsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
         
+        // Ordenar manualment per timestamp
+        incidentsData = incidentsData.sort((a, b) => {
+          if (!a.timestamp || !b.timestamp) return 0;
+          return b.timestamp.toDate() - a.timestamp.toDate();
+        });
+        
         setIncidents(incidentsData);
-        console.log(`🚨 ${incidentsData.length} incidencies carregades`);
+        console.log(`🚨 ${incidentsData.length} incidencies carregades (simplificat)`);
         
         // Gestionar marcadors d'incidencies
         if (markerLayerGroupRef.current) {
@@ -380,6 +393,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
       }
     }, (error) => {
       console.error('❌ Error listener incidencies:', error);
+      console.log('⚠️ Les incidencies no es poden carregar. Comprova els permisos de Firebase.');
     });
 
     incidentsListenerRef.current = unsubscribe;
@@ -390,21 +404,22 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         incidentsListenerRef.current = null;
       }
     };
-  }, [isAdmin, mapInstanceRef]);
+  }, [currentUser, mapInstanceRef]); // Canviat de isAdmin a currentUser
 
-  // Listener per rutes
+  // Listener per rutes - VERSIÓ SIMPLIFICADA
   useEffect(() => {
     if (!currentUser) {
       setRoutes([]);
       return;
     }
 
-    console.log('📚 INICIANT LISTENER PER RUTES...');
+    console.log('📚 INICIANT LISTENER SIMPLIFICAT PER RUTES...');
     
+    // Query simple sense orderBy problemàtic
     const routesQuery = query(
       collection(db, 'routes'),
       where('deleted', '==', false),
-      orderBy('createdAt', 'desc')
+      limit(30)
     );
     
     const unsubscribe = onSnapshot(routesQuery, (snapshot) => {
@@ -412,18 +427,17 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         let routesData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-          // Assegurar que sempre tenim un estat actiu
           active: doc.data().active !== false
         }));
         
-        // Ordenar manualment per createdAt si hi ha problemes amb l'index
+        // Ordenar manualment per createdAt
         routesData = routesData.sort((a, b) => {
           if (!a.createdAt || !b.createdAt) return 0;
           return b.createdAt.toDate() - a.createdAt.toDate();
         });
         
         setRoutes(routesData);
-        console.log(`📚 ${routesData.length} rutes carregades (${routesData.filter(r => r.active).length} actives)`);
+        console.log(`📚 ${routesData.length} rutes carregades (${routesData.filter(r => r.active).length} actives) - simplificat`);
         
       } catch (error) {
         console.error('❌ Error processant rutes:', error);
@@ -452,18 +466,9 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
   // Cleanup quan es desmunta el component
   useEffect(() => {
     return () => {
-      // Netejar tots els listeners
-      if (routesListenerRef.current) {
-        routesListenerRef.current();
-      }
-      if (usersListenerRef.current) {
-        usersListenerRef.current();
-      }
-      if (incidentsListenerRef.current) {
-        incidentsListenerRef.current();
-      }
-      
-      // Netejar tots els marcadors
+      if (routesListenerRef.current) routesListenerRef.current();
+      if (usersListenerRef.current) usersListenerRef.current();
+      if (incidentsListenerRef.current) incidentsListenerRef.current();
       clearAllMarkers();
     };
   }, []);
@@ -477,6 +482,6 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     makeUserAdmin,
     deleteRoute,
     resolveIncident,
-    refreshData // Afegim la funcio refresh que faltava
+    refreshData
   };
 };
