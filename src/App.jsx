@@ -39,12 +39,15 @@ export const db = getFirestore(app);
 const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
 
 const BikeGPSApp = () => {
+  console.log('🚀 BikeGPSApp renderitzant...');
+
   // Auth state
   const {
     currentUser,
     isAdmin,
     isSuperAdmin,
-    loading,
+    loading: authLoading,
+    error: authError,
     handleLogin,
     handleRegister,
     handleLogout
@@ -74,11 +77,13 @@ const BikeGPSApp = () => {
     users,
     incidents,
     allUsers,
+    loading: dataLoading,
+    error: dataError,
     loadAllUsers,
     makeUserAdmin,
     deleteRoute,
     resolveIncident,
-    refreshData // Afegim funció per refrescar dades
+    refreshData
   } = useFirebaseListeners(currentUser, isAdmin, isSuperAdmin, mapInstanceRef);
 
   // UI state
@@ -89,50 +94,113 @@ const BikeGPSApp = () => {
   const [followUser, setFollowUser] = useState(true);
   const [rotateMap, setRotateMap] = useState(true);
   const [mapControlsExpanded, setMapControlsExpanded] = useState(false);
-  const [debugInfo, setDebugInfo] = useState({}); // Per debug
+  const [debugInfo, setDebugInfo] = useState({});
 
-  // Debug: Actualitza info de debug
+  // Debug: Log dels estats
   useEffect(() => {
-    setDebugInfo({
-      routesCount: routes?.length || 0,
-      activeUsersCount: users?.length || 0,
-      incidentsCount: incidents?.length || 0,
-      allUsersCount: allUsers?.length || 0,
-      currentUserLocation: userLocation,
-      isTracking,
-      currentRoute: currentRoute?.name || 'Cap'
+    console.log('📊 Estats actualitzats:', {
+      currentUser: currentUser?.email,
+      isAdmin,
+      isSuperAdmin,
+      authLoading,
+      dataLoading,
+      routesCount: routes?.length,
+      usersCount: users?.length,
+      incidentsCount: incidents?.length,
+      authError,
+      dataError
     });
-  }, [routes, users, incidents, allUsers, userLocation, isTracking, currentRoute]);
+  }, [currentUser, isAdmin, isSuperAdmin, authLoading, dataLoading, routes, users, incidents, authError, dataError]);
+
+  // Debug info actualitzada
+  useEffect(() => {
+    const info = {
+      // Estat d'autenticació
+      user: currentUser?.email || 'No autenticat',
+      isAdmin: isAdmin ? '✅' : '❌',
+      isSuperAdmin: isSuperAdmin ? '✅' : '❌',
+      
+      // Estats de càrrega
+      authLoading: authLoading ? '⏳' : '✅',
+      dataLoading: dataLoading ? '⏳' : '✅',
+      
+      // Dades
+      routes: routes?.length || 0,
+      activeUsers: users?.length || 0,
+      allUsers: allUsers?.length || 0,
+      incidents: incidents?.length || 0,
+      
+      // Ubicació
+      userLocation: userLocation ? '📍' : '❌',
+      isTracking: isTracking ? '✅' : '❌',
+      locationError: locationError || 'Cap',
+      
+      // Ruta actual
+      currentRoute: currentRoute?.name || 'Cap',
+      
+      // Errors
+      authError: authError || 'Cap',
+      dataError: dataError || 'Cap'
+    };
+    
+    setDebugInfo(info);
+  }, [
+    currentUser, isAdmin, isSuperAdmin, authLoading, dataLoading,
+    routes, users, allUsers, incidents, userLocation, isTracking,
+    locationError, currentRoute, authError, dataError
+  ]);
 
   // Initialize location tracking when user logs in
   useEffect(() => {
     if (currentUser && !isTracking) {
-      console.log('📍 Iniciant seguiment ubicació...');
+      console.log('📍 Iniciant seguiment ubicació per:', currentUser.email);
       startLocationTracking();
     }
   }, [currentUser, isTracking, startLocationTracking]);
 
-  // Refrescar dades periòdicament per assegurar sincronització
+  // Refresh data periodically
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && refreshData) {
+      console.log('⏰ Configurant refresc automàtic de dades');
       const interval = setInterval(() => {
-        console.log('🔄 Refrescant dades...');
-        if (refreshData) refreshData();
-      }, 30000); // Cada 30 segons
+        console.log('🔄 Refrescant dades automàticament...');
+        refreshData();
+      }, 30000); // Every 30 seconds
 
-      return () => clearInterval(interval);
+      return () => {
+        console.log('🛑 Desactivant refresc automàtic');
+        clearInterval(interval);
+      };
     }
   }, [currentUser, refreshData]);
 
-  // Route creation handler amb millor gestió d'errors
+  // Show authentication errors
+  useEffect(() => {
+    if (authError) {
+      console.error('❌ Error d\'autenticació:', authError);
+      showNotification(`Error d'autenticació: ${authError}`, 'error', setNotification);
+    }
+  }, [authError]);
+
+  // Show data errors
+  useEffect(() => {
+    if (dataError) {
+      console.error('❌ Error de dades:', dataError);
+      showNotification(`Error carregant dades: ${dataError}`, 'error', setNotification);
+    }
+  }, [dataError]);
+
+  // Route creation handler
   const handleCreateRoute = async (e) => {
     e.preventDefault();
+    console.log('📤 Iniciant creació de ruta...');
+    
     const formData = new FormData(e.target);
     const name = formData.get('routeName')?.trim();
     const description = formData.get('routeDescription')?.trim();
     const gpxFile = formData.get('gpxFile');
     
-    // Validacions millorades
+    // Validations
     if (!name) {
       showNotification('El nom de la ruta és obligatori', 'error', setNotification);
       return;
@@ -143,14 +211,12 @@ const BikeGPSApp = () => {
       return;
     }
 
-    // Validar tipus d'arxiu
     if (!gpxFile.name.toLowerCase().endsWith('.gpx')) {
       showNotification('L\'arxiu ha de ser un fitxer GPX', 'error', setNotification);
       return;
     }
 
     try {
-      console.log('📤 Iniciant creació de ruta:', name);
       setShowUploadProgress(true);
       setUploadProgress(20);
 
@@ -169,15 +235,15 @@ const BikeGPSApp = () => {
       }
       
       const routeData = {
-        name: name,
+        name,
         description: description || 'Sense descripció',
-        coordinates: coordinates,
+        coordinates,
         createdBy: currentUser.uid,
         createdByName: currentUser.displayName || currentUser.email || 'Usuari',
         gpxFileName: gpxFile.name,
         pointsCount: coordinates.length,
         deleted: false,
-        active: true, // Assegurem que la ruta està activa
+        active: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
@@ -192,9 +258,12 @@ const BikeGPSApp = () => {
       // Reset form
       e.target.reset();
       
-      // Refrescar dades per mostrar la nova ruta
+      // Refresh data
       if (refreshData) {
-        setTimeout(() => refreshData(), 1000);
+        setTimeout(() => {
+          console.log('🔄 Refrescant dades després de crear ruta...');
+          refreshData();
+        }, 1000);
       }
 
       setTimeout(() => {
@@ -205,18 +274,17 @@ const BikeGPSApp = () => {
     } catch (error) {
       setShowUploadProgress(false);
       setUploadProgress(0);
-      console.error('❌ Error creating route:', error);
+      console.error('❌ Error creant ruta:', error);
       showNotification('Error creant ruta: ' + error.message, 'error', setNotification);
     }
   };
 
-  // Incident reporting amb millor gestió
+  // Incident reporting
   const reportIncident = async () => {
+    console.log('🚨 Iniciant report d\'incidència...');
     const message = prompt('Descriu la incidència (opcional):');
     
     try {
-      console.log('🚨 Reportant incidència...');
-      
       let location;
       
       try {
@@ -234,11 +302,11 @@ const BikeGPSApp = () => {
         userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
         userEmail: currentUser.email || '',
         message: message || 'Incidència reportada sense missatge',
-        location: location,
+        location,
         timestamp: serverTimestamp(),
         resolved: false,
         reportedBy: currentUser.uid,
-        type: 'user_report' // Tipus d'incidència
+        type: 'user_report'
       };
       
       console.log('💾 Guardant incidència:', incidentData);
@@ -247,25 +315,90 @@ const BikeGPSApp = () => {
       
       showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success', setNotification);
       
-      // Refrescar dades per mostrar la nova incidència
+      // Refresh data
       if (refreshData) {
-        setTimeout(() => refreshData(), 1000);
+        setTimeout(() => {
+          console.log('🔄 Refrescant dades després de reportar incidència...');
+          refreshData();
+        }, 1000);
       }
       
     } catch (error) {
-      console.error('❌ Error reporting incident:', error);
+      console.error('❌ Error reportant incidència:', error);
       showNotification('❌ Error reportant incidència: ' + error.message, 'error', setNotification);
     }
   };
 
-  // Loading screen millorat
-  if (loading) {
+  // Enhanced debug panel
+  const DebugPanel = () => {
+    if (!isAdmin && !import.meta.env.DEV) return null;
+    
+    return (
+      <div className="fixed bottom-4 left-4 bg-black bg-opacity-90 text-white p-4 rounded-lg text-xs max-w-sm z-50 font-mono">
+        <div className="font-bold mb-3 text-yellow-400">🐛 Debug Panel</div>
+        
+        <div className="space-y-1">
+          <div><span className="text-blue-300">Usuari:</span> {debugInfo.user}</div>
+          <div><span className="text-blue-300">Admin:</span> {debugInfo.isAdmin}</div>
+          <div><span className="text-blue-300">Super Admin:</span> {debugInfo.isSuperAdmin}</div>
+        </div>
+
+        <div className="border-t border-gray-600 my-2"></div>
+        
+        <div className="space-y-1">
+          <div><span className="text-green-300">Auth Loading:</span> {debugInfo.authLoading}</div>
+          <div><span className="text-green-300">Data Loading:</span> {debugInfo.dataLoading}</div>
+        </div>
+
+        <div className="border-t border-gray-600 my-2"></div>
+        
+        <div className="space-y-1">
+          <div><span className="text-purple-300">Rutes:</span> {debugInfo.routes}</div>
+          <div><span className="text-purple-300">Usuaris Actius:</span> {debugInfo.activeUsers}</div>
+          <div><span className="text-purple-300">Tots Usuaris:</span> {debugInfo.allUsers}</div>
+          <div><span className="text-purple-300">Incidències:</span> {debugInfo.incidents}</div>
+        </div>
+
+        <div className="border-t border-gray-600 my-2"></div>
+        
+        <div className="space-y-1">
+          <div><span className="text-orange-300">Ubicació:</span> {debugInfo.userLocation}</div>
+          <div><span className="text-orange-300">Seguiment:</span> {debugInfo.isTracking}</div>
+          <div><span className="text-orange-300">Ruta:</span> {debugInfo.currentRoute}</div>
+        </div>
+
+        {(debugInfo.authError !== 'Cap' || debugInfo.dataError !== 'Cap') && (
+          <>
+            <div className="border-t border-gray-600 my-2"></div>
+            <div className="space-y-1 text-red-300">
+              {debugInfo.authError !== 'Cap' && <div>Auth Error: {debugInfo.authError}</div>}
+              {debugInfo.dataError !== 'Cap' && <div>Data Error: {debugInfo.dataError}</div>}
+            </div>
+          </>
+        )}
+
+        <div className="border-t border-gray-600 my-2"></div>
+        <button 
+          onClick={() => refreshData && refreshData()}
+          className="bg-blue-600 px-2 py-1 rounded text-xs hover:bg-blue-700"
+        >
+          🔄 Refresh Data
+        </button>
+      </div>
+    );
+  };
+
+  // Loading screen
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{background: '#f0f0f3'}}>
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-gray-300 border-t-yellow-400 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-lg text-gray-700">Inicialitzant BikeGPS...</p>
-          <p className="text-sm text-gray-500 mt-2">Connectant amb Firebase...</p>
+          <div className="w-16 h-16 border-4 border-gray-300 border-t-yellow-400 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl text-gray-700 mb-2">Inicialitzant BikeGPS...</p>
+          <p className="text-sm text-gray-500">Connectant amb Firebase...</p>
+          {authError && (
+            <p className="text-red-500 text-sm mt-2">Error: {authError}</p>
+          )}
         </div>
       </div>
     );
@@ -274,33 +407,32 @@ const BikeGPSApp = () => {
   // Auth screen
   if (!currentUser) {
     return (
-      <AuthScreen
-        authTab={authTab}
-        setAuthTab={setAuthTab}
-        handleLogin={handleLogin}
-        handleRegister={handleRegister}
-        notification={notification}
-      />
+      <>
+        <AuthScreen
+          authTab={authTab}
+          setAuthTab={setAuthTab}
+          handleLogin={handleLogin}
+          handleRegister={handleRegister}
+          notification={notification}
+        />
+        <DebugPanel />
+      </>
     );
   }
 
-  // Debug panel per desenvolupament (només per admins)
-  const DebugPanel = () => {
-    if (!isAdmin) return null;
-    
+  // Data loading screen (after auth)
+  if (dataLoading) {
     return (
-      <div className="fixed bottom-4 right-4 bg-black bg-opacity-80 text-white p-3 rounded text-xs max-w-xs z-50">
-        <div className="font-bold mb-2">🐛 Debug Info</div>
-        <div>Rutes: {debugInfo.routesCount}</div>
-        <div>Usuaris actius: {debugInfo.activeUsersCount}</div>
-        <div>Tots els usuaris: {debugInfo.allUsersCount}</div>
-        <div>Incidències: {debugInfo.incidentsCount}</div>
-        <div>Ruta actual: {debugInfo.currentRoute}</div>
-        <div>Seguiment: {debugInfo.isTracking ? '✅' : '❌'}</div>
-        <div>Ubicació: {debugInfo.currentUserLocation ? '📍' : '❌'}</div>
+      <div className="min-h-screen flex items-center justify-center" style={{background: '#f0f0f3'}}>
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-gray-300 border-t-blue-400 rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xl text-gray-700 mb-2">Carregant dades...</p>
+          <p className="text-sm text-gray-500">Sincronitzant amb Firebase...</p>
+          <p className="text-xs text-gray-400 mt-2">Usuari: {currentUser.email}</p>
+        </div>
       </div>
     );
-  };
+  }
 
   // Admin dashboard
   if (isAdmin) {
@@ -309,10 +441,10 @@ const BikeGPSApp = () => {
         <AdminDashboard
           currentUser={currentUser}
           isSuperAdmin={isSuperAdmin}
-          routes={routes}
-          users={users}
-          incidents={incidents}
-          allUsers={allUsers}
+          routes={routes || []}
+          users={users || []}
+          incidents={incidents || []}
+          allUsers={allUsers || []}
           currentRoute={currentRoute}
           showUploadProgress={showUploadProgress}
           uploadProgress={uploadProgress}
@@ -338,9 +470,9 @@ const BikeGPSApp = () => {
     <>
       <UserDashboard
         currentUser={currentUser}
-        routes={routes}
-        users={users}
-        incidents={incidents}
+        routes={routes || []}
+        users={users || []}
+        incidents={incidents || []}
         currentRoute={currentRoute}
         routeProgress={routeProgress}
         isReturning={isReturning}
