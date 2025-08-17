@@ -4,15 +4,13 @@ import BikeMap from './BikeMap';
 const AdminDashboard = ({
   currentUser,
   isSuperAdmin,
-  routes,
-  users,
-  incidents,
-  allUsers,
+  routes = [], // Fallback per evitar errors
+  users = [], // Fallback per evitar errors  
+  incidents = [], // Fallback per evitar errors
+  allUsers = [], // Fallback per evitar errors
   currentRoute,
   showUploadProgress,
   uploadProgress,
-  showAdminManagement,
-  setShowAdminManagement,
   handleCreateRoute,
   selectRoute,
   deleteRoute,
@@ -22,11 +20,21 @@ const AdminDashboard = ({
   handleLogout,
   mapInstanceRef,
   userLocation,
-  notification
+  notification,
+  refreshData // Afegim aquesta prop que faltava
 }) => {
   const [activeTab, setActiveTab] = useState('map');
   const [followUser, setFollowUser] = useState(true);
   const [rotateMap, setRotateMap] = useState(true);
+
+  // Debug: Log de les props rebudes
+  console.log('🔍 AdminDashboard props:', {
+    routesLength: routes?.length,
+    usersLength: users?.length,
+    incidentsLength: incidents?.length,
+    allUsersLength: allUsers?.length,
+    hasRefreshData: !!refreshData
+  });
 
   const TabButton = ({ id, label, icon, count }) => (
     <button
@@ -65,17 +73,31 @@ const AdminDashboard = ({
                 </span>
               </h1>
               <p className="text-sm text-gray-600 mt-1">
-                Benvingut/da, {currentUser.email}
+                Benvingut/da, {currentUser?.email}
                 {isSuperAdmin && <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">Super Admin</span>}
               </p>
             </div>
             
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
-            >
-              Tancar Sessió
-            </button>
+            <div className="flex gap-2">
+              {/* Botó de refresh manual */}
+              <button
+                onClick={() => {
+                  console.log('🔄 Refresh manual des d\'AdminDashboard');
+                  if (refreshData) refreshData();
+                }}
+                className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                title="Refrescar dades"
+              >
+                🔄
+              </button>
+              
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+              >
+                Tancar Sessió
+              </button>
+            </div>
           </div>
         </div>
 
@@ -92,6 +114,13 @@ const AdminDashboard = ({
             )}
           </div>
         </div>
+
+        {/* Debug Info (només per desenvolupament) */}
+        {import.meta.env.DEV && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4 text-sm">
+            <strong>🐛 Debug Info:</strong> Routes: {routes.length} | Users: {users.length} | Incidents: {incidents.length} | AllUsers: {allUsers.length}
+          </div>
+        )}
 
         {/* Tab Content */}
         {activeTab === 'map' && (
@@ -164,22 +193,36 @@ const AdminDashboard = ({
         {activeTab === 'routes' && (
           <div className="bg-white rounded-lg shadow-sm p-4">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">Gestió de Rutes</h2>
-              <button
-                onClick={() => setActiveTab('create')}
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
-              >
-                ➕ Nova Ruta
-              </button>
+              <h2 className="text-lg font-semibold">Gestió de Rutes ({routes.length})</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    console.log('🔄 Refrescant rutes...');
+                    if (refreshData) refreshData();
+                  }}
+                  className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                  🔄 Actualitzar
+                </button>
+                <button
+                  onClick={() => setActiveTab('create')}
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                >
+                  ➕ Nova Ruta
+                </button>
+              </div>
             </div>
 
             {routes.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-6xl mb-4">🛤️</div>
-                <p className="text-gray-500">No hi ha rutes creades</p>
+                <p className="text-gray-500 mb-2">No hi ha rutes creades</p>
+                <p className="text-xs text-gray-400 mb-4">
+                  Debug: routes array length = {routes.length}
+                </p>
                 <button
                   onClick={() => setActiveTab('create')}
-                  className="mt-4 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
                 >
                   Crear la primera ruta
                 </button>
@@ -202,11 +245,11 @@ const AdminDashboard = ({
                     <p className="text-sm text-gray-600 mb-3 line-clamp-2">{route.description}</p>
                     
                     <div className="text-xs text-gray-500 mb-4">
-                      <div>📊 {route.pointsCount} punts GPS</div>
-                      <div>📄 {route.gpxFileName}</div>
-                      <div>👤 Creada per: {route.createdBy}</div>
+                      <div>📊 {route.pointsCount || route.coordinates?.length || 0} punts GPS</div>
+                      <div>📄 {route.gpxFileName || 'Fitxer no especificat'}</div>
+                      <div>👤 Creada per: {route.createdByName || route.createdBy || 'Desconegut'}</div>
                       {route.createdAt && (
-                        <div>📅 {route.createdAt.toDate?.()?.toLocaleDateString()}</div>
+                        <div>📅 {route.createdAt.toDate?.()?.toLocaleDateString() || 'Data no disponible'}</div>
                       )}
                     </div>
                     
@@ -243,40 +286,66 @@ const AdminDashboard = ({
 
         {activeTab === 'users' && (
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <h2 className="text-lg font-semibold mb-4">Usuaris Connectats</h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">Usuaris Connectats ({users.length})</h2>
+              <button
+                onClick={() => {
+                  console.log('🔄 Refrescant usuaris...');
+                  if (refreshData) refreshData();
+                }}
+                className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                🔄 Actualitzar
+              </button>
+            </div>
             
             {users.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-6xl mb-4">👥</div>
-                <p className="text-gray-500">No hi ha usuaris connectats</p>
+                <p className="text-gray-500 mb-2">No hi ha usuaris connectats</p>
+                <p className="text-xs text-gray-400 mb-4">
+                  Debug: users array length = {users.length}
+                </p>
               </div>
             ) : (
               <div className="space-y-3">
                 {users.map((user) => (
-                  <div key={user.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                  <div key={user.id || user.uid} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                         <span className="text-blue-600 font-medium">
-                          {user.email?.charAt(0).toUpperCase() || '?'}
+                          {(user.displayName || user.email)?.charAt(0).toUpperCase() || '?'}
                         </span>
                       </div>
                       
                       <div>
-                        <div className="font-medium">{user.email}</div>
+                        <div className="font-medium">{user.displayName || user.email || 'Usuari sense nom'}</div>
                         <div className="text-sm text-gray-500">
-                          {user.lastSeen?.toDate?.()?.toLocaleString() || 'Mai connectat'}
+                          {user.lastUpdated?.toDate?.()?.toLocaleString() || 
+                           user.lastSeen?.toDate?.()?.toLocaleString() || 
+                           'Mai connectat'}
                         </div>
+                        {user.location && (
+                          <div className="text-xs text-gray-400">
+                            📍 {user.location.latitude?.toFixed(4)}, {user.location.longitude?.toFixed(4)}
+                          </div>
+                        )}
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {user.currentLocation && (
+                      {user.isOnline && (
                         <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                          Online
+                        </span>
+                      )}
+                      {user.location && (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
                           GPS Actiu
                         </span>
                       )}
                       {user.isAdmin && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+                        <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">
                           Admin
                         </span>
                       )}
@@ -290,14 +359,28 @@ const AdminDashboard = ({
 
         {activeTab === 'incidents' && (
           <div className="bg-white rounded-lg shadow-sm p-4">
-            <h2 className="text-lg font-semibold mb-4">
-              Gestió d'Incidències ({incidents.filter(i => !i.resolved).length} pendents)
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">
+                Gestió d'Incidències ({incidents.filter(i => !i.resolved).length} pendents / {incidents.length} total)
+              </h2>
+              <button
+                onClick={() => {
+                  console.log('🔄 Refrescant incidències...');
+                  if (refreshData) refreshData();
+                }}
+                className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                🔄 Actualitzar
+              </button>
+            </div>
             
             {incidents.length === 0 ? (
               <div className="text-center py-12">
                 <div className="text-gray-400 text-6xl mb-4">🚨</div>
-                <p className="text-gray-500">No hi ha incidències reportades</p>
+                <p className="text-gray-500 mb-2">No hi ha incidències reportades</p>
+                <p className="text-xs text-gray-400 mb-4">
+                  Debug: incidents array length = {incidents.length}
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -316,7 +399,7 @@ const AdminDashboard = ({
                         <div className="flex items-center gap-2">
                           <span className={`text-2xl ${incident.resolved ? '✅' : '🚨'}`} />
                           <div>
-                            <h3 className="font-medium">{incident.userName}</h3>
+                            <h3 className="font-medium">{incident.userName || 'Usuari anònim'}</h3>
                             <span className="text-sm text-gray-500">
                               {incident.timestamp?.toDate?.()?.toLocaleString() || 'Data no disponible'}
                             </span>
@@ -332,7 +415,7 @@ const AdminDashboard = ({
                         </span>
                       </div>
                       
-                      <p className="text-gray-700 mb-3">{incident.message}</p>
+                      <p className="text-gray-700 mb-3">{incident.message || 'Sense missatge'}</p>
                       
                       {incident.location && (
                         <div className="text-sm text-gray-500 mb-3">
