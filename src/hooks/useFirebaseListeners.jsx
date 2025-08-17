@@ -20,6 +20,8 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
   const [users, setUsers] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   // Refs per evitar loops infinits
   const routesListenerRef = useRef(null);
@@ -30,6 +32,12 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
   const userMarkersRef = useRef(new Map());
   const incidentMarkersRef = useRef(new Map());
   const markerLayerGroupRef = useRef(null);
+
+  console.log('🎯 useFirebaseListeners inicialitzat:', { 
+    hasCurrentUser: !!currentUser, 
+    isAdmin, 
+    isSuperAdmin 
+  });
 
   // Funcio per inicialitzar layer group
   const initializeMarkerLayer = () => {
@@ -55,11 +63,35 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
   // Funcio per refrescar dades
   const refreshData = async () => {
     console.log('🔄 Forçant refresh manual de dades...');
+    setLoading(true);
     
     try {
-      // Refrescar usuaris manualment
+      // Refrescar rutes
+      console.log('📚 Refrescant rutes...');
+      const routesSnapshot = await getDocs(
+        query(collection(db, 'routes'), where('deleted', '==', false), limit(50))
+      );
+      const routesData = routesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        active: doc.data().active !== false
+      }));
+      
+      // Ordenar manualment per createdAt
+      routesData.sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0;
+        return b.createdAt.toDate() - a.createdAt.toDate();
+      });
+      
+      setRoutes(routesData);
+      console.log(`📚 ${routesData.length} rutes refrescades manualment`);
+
+      // Refrescar usuaris si hi ha currentUser
       if (currentUser) {
-        const userLocationsSnapshot = await getDocs(collection(db, 'userLocations'));
+        console.log('👥 Refrescant usuaris...');
+        const userLocationsSnapshot = await getDocs(
+          query(collection(db, 'userLocations'), where('isOnline', '==', true), limit(50))
+        );
         const usersData = [];
         
         userLocationsSnapshot.docs.forEach((docSnap) => {
@@ -74,7 +106,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
             const now = new Date();
             const diffMinutes = (now - lastUpdate) / (1000 * 60);
             
-            if (diffMinutes <= 5) {
+            if (diffMinutes <= 15) { // Més generous per refresh manual
               usersData.push({
                 id: docSnap.id,
                 ...userData
@@ -84,10 +116,34 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         });
         
         setUsers(usersData);
-        console.log(`🔄 Refresh manual: ${usersData.length} usuaris carregats`);
+        console.log(`👥 ${usersData.length} usuaris refrescats manualment`);
       }
+
+      // Refrescar incidències
+      console.log('🚨 Refrescant incidències...');
+      const incidentsSnapshot = await getDocs(
+        query(collection(db, 'incidents'), limit(50))
+      );
+      let incidentsData = incidentsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      // Ordenar manualment per timestamp
+      incidentsData = incidentsData.sort((a, b) => {
+        if (!a.timestamp || !b.timestamp) return 0;
+        return b.timestamp.toDate() - a.timestamp.toDate();
+      });
+      
+      setIncidents(incidentsData);
+      console.log(`🚨 ${incidentsData.length} incidències refrescades manualment`);
+      
+      setError(null);
     } catch (error) {
       console.error('❌ Error en refresh manual:', error);
+      setError(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -106,6 +162,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
       console.log(`✅ ${usersData.length} usuaris carregats`);
     } catch (error) {
       console.error('❌ Error carregant usuaris:', error);
+      setError(error.message);
     }
   };
 
@@ -120,10 +177,18 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         createdBy: currentUser.uid,
         createdAt: serverTimestamp()
       });
+      
+      // També actualitzar el document d'usuari
+      await updateDoc(doc(db, 'users', userId), {
+        isAdmin: true,
+        updatedAt: serverTimestamp()
+      });
+      
       console.log('✅ Usuari fet admin correctament');
       loadAllUsers();
     } catch (error) {
       console.error('❌ Error fent admin:', error);
+      setError(error.message);
     }
   };
 
@@ -139,8 +204,12 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         deletedBy: currentUser.uid
       });
       console.log('✅ Ruta eliminada correctament');
+      
+      // Actualitzar estat local immediatament
+      setRoutes(prevRoutes => prevRoutes.filter(route => route.id !== routeId));
     } catch (error) {
       console.error('❌ Error eliminant ruta:', error);
+      setError(error.message);
     }
   };
 
@@ -156,8 +225,18 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         resolvedBy: currentUser.uid
       });
       console.log('✅ Incidencia resolta');
+      
+      // Actualitzar estat local immediatament
+      setIncidents(prevIncidents => 
+        prevIncidents.map(incident => 
+          incident.id === incidentId 
+            ? { ...incident, resolved: true, resolvedAt: new Date(), resolvedBy: currentUser.uid }
+            : incident
+        )
+      );
     } catch (error) {
       console.error('❌ Error resolent incidencia:', error);
+      setError(error.message);
     }
   };
 
@@ -205,7 +284,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
       markerLayerGroupRef.current.addLayer(marker);
       userMarkersRef.current.set(userId, marker);
       
-      console.log(`📍 Marcador simple creat per ${userData.displayName || userData.email || userData.uid}`);
+      console.log(`📍 Marcador creat per ${userData.displayName || userData.email || userData.uid}`);
     } catch (error) {
       console.warn('⚠️ Error creant marcador usuari:', error);
     }
@@ -224,7 +303,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     });
     incidentMarkersRef.current.clear();
 
-    // Afegir marcadors d'incidencies actives amb estil simple
+    // Afegir marcadors d'incidencies actives
     incidentsData.forEach(incident => {
       if (incident.location && !incident.resolved) {
         try {
@@ -281,7 +360,62 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     }
   }, [mapInstanceRef]);
 
-  // Listener per usuaris connectats - VERSIÓ SIMPLIFICADA SENSE ORDERBY
+  // Listener per rutes - PRIORITAT ALTA, SEMPRE ACTIU
+  useEffect(() => {
+    console.log('📚 Iniciant listener per rutes...');
+    setLoading(true);
+    
+    // Query simple sense orderBy problemàtic
+    const routesQuery = query(
+      collection(db, 'routes'),
+      where('deleted', '==', false),
+      limit(100) // Augmentem el límit
+    );
+    
+    const unsubscribe = onSnapshot(routesQuery, (snapshot) => {
+      try {
+        let routesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          active: doc.data().active !== false
+        }));
+        
+        // Ordenar manualment per createdAt
+        routesData = routesData.sort((a, b) => {
+          if (!a.createdAt || !b.createdAt) return 0;
+          return b.createdAt.toDate() - a.createdAt.toDate();
+        });
+        
+        setRoutes(routesData);
+        console.log(`📚 ${routesData.length} rutes carregades via listener`);
+        
+        // Marcar com carregat només després que les rutes es carreguin
+        if (!currentUser) {
+          setLoading(false);
+        }
+        
+      } catch (error) {
+        console.error('❌ Error processant rutes:', error);
+        setError(error.message);
+        setLoading(false);
+      }
+    }, (error) => {
+      console.error('❌ Error listener rutes:', error);
+      setError(error.message);
+      setLoading(false);
+    });
+
+    routesListenerRef.current = unsubscribe;
+    
+    return () => {
+      if (routesListenerRef.current) {
+        routesListenerRef.current();
+        routesListenerRef.current = null;
+      }
+    };
+  }, []); // Sense dependencies perquè les rutes són públiques
+
+  // Listener per usuaris connectats - NOMÉS SI HI HA CURRENTUSER
   useEffect(() => {
     if (!currentUser) {
       clearAllMarkers();
@@ -289,13 +423,13 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
       return;
     }
 
-    console.log('👂 INICIANT LISTENER SIMPLIFICAT PER USUARIS...');
+    console.log('👥 Iniciant listener per usuaris...');
     
-    // Query més simple sense orderBy per evitar problemes d'índex
+    // Query simple sense orderBy per evitar problemes d'índex
     const usersQuery = query(
       collection(db, 'userLocations'),
       where('isOnline', '==', true),
-      limit(50) // Limitem per rendiment
+      limit(50)
     );
     
     const unsubscribe = onSnapshot(usersQuery, (snapshot) => {
@@ -314,7 +448,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
             const now = new Date();
             const diffMinutes = (now - lastUpdate) / (1000 * 60);
             
-            if (diffMinutes <= 10) { // Ampliem a 10 minuts
+            if (diffMinutes <= 10) {
               usersData.push({
                 id: docSnap.id,
                 ...userData
@@ -329,17 +463,19 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         });
         
         setUsers(usersData);
-        console.log(`👥 ${usersData.length} usuaris actius trobats (simplificat)`);
+        console.log(`👥 ${usersData.length} usuaris actius via listener`);
+        
+        setLoading(false); // Marcar com carregat després d'usuaris
         
       } catch (error) {
         console.error('❌ Error processant usuaris:', error);
+        setError(error.message);
+        setLoading(false);
       }
     }, (error) => {
       console.error('❌ Error listener usuaris:', error);
-      console.log('🔄 Intentant fallback manual...');
-      
-      // Fallback manual
-      refreshData();
+      setError(error.message);
+      setLoading(false);
     });
 
     usersListenerRef.current = unsubscribe;
@@ -352,19 +488,19 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     };
   }, [currentUser, mapInstanceRef]);
 
-  // Listener per incidencies - VERSIÓ SIMPLIFICADA
+  // Listener per incidencies - NOMÉS SI HI HA CURRENTUSER (no cal ser admin)
   useEffect(() => {
-    if (!currentUser) { // Canviat de !isAdmin a !currentUser
+    if (!currentUser) {
       setIncidents([]);
       return;
     }
 
-    console.log('🚨 INICIANT LISTENER SIMPLIFICAT PER INCIDENCIES...');
+    console.log('🚨 Iniciant listener per incidencies...');
     
     // Query simple sense orderBy
     const incidentsQuery = query(
       collection(db, 'incidents'),
-      limit(20) // Limitem per rendiment
+      limit(50)
     );
     
     const unsubscribe = onSnapshot(incidentsQuery, (snapshot) => {
@@ -381,7 +517,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         });
         
         setIncidents(incidentsData);
-        console.log(`🚨 ${incidentsData.length} incidencies carregades (simplificat)`);
+        console.log(`🚨 ${incidentsData.length} incidencies carregades via listener`);
         
         // Gestionar marcadors d'incidencies
         if (markerLayerGroupRef.current) {
@@ -390,10 +526,11 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         
       } catch (error) {
         console.error('❌ Error processant incidencies:', error);
+        setError(error.message);
       }
     }, (error) => {
       console.error('❌ Error listener incidencies:', error);
-      console.log('⚠️ Les incidencies no es poden carregar. Comprova els permisos de Firebase.');
+      setError(error.message);
     });
 
     incidentsListenerRef.current = unsubscribe;
@@ -404,68 +541,19 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
         incidentsListenerRef.current = null;
       }
     };
-  }, [currentUser, mapInstanceRef]); // Canviat de isAdmin a currentUser
-
-  // Listener per rutes - VERSIÓ SIMPLIFICADA
-  useEffect(() => {
-    if (!currentUser) {
-      setRoutes([]);
-      return;
-    }
-
-    console.log('📚 INICIANT LISTENER SIMPLIFICAT PER RUTES...');
-    
-    // Query simple sense orderBy problemàtic
-    const routesQuery = query(
-      collection(db, 'routes'),
-      where('deleted', '==', false),
-      limit(30)
-    );
-    
-    const unsubscribe = onSnapshot(routesQuery, (snapshot) => {
-      try {
-        let routesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          active: doc.data().active !== false
-        }));
-        
-        // Ordenar manualment per createdAt
-        routesData = routesData.sort((a, b) => {
-          if (!a.createdAt || !b.createdAt) return 0;
-          return b.createdAt.toDate() - a.createdAt.toDate();
-        });
-        
-        setRoutes(routesData);
-        console.log(`📚 ${routesData.length} rutes carregades (${routesData.filter(r => r.active).length} actives) - simplificat`);
-        
-      } catch (error) {
-        console.error('❌ Error processant rutes:', error);
-      }
-    }, (error) => {
-      console.error('❌ Error listener rutes:', error);
-    });
-
-    routesListenerRef.current = unsubscribe;
-    
-    return () => {
-      if (routesListenerRef.current) {
-        routesListenerRef.current();
-        routesListenerRef.current = null;
-      }
-    };
-  }, [currentUser]);
+  }, [currentUser, mapInstanceRef]);
 
   // Carregar tots els usuaris si es super admin
   useEffect(() => {
-    if (isSuperAdmin) {
+    if (isSuperAdmin && currentUser) {
       loadAllUsers();
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, currentUser]);
 
   // Cleanup quan es desmunta el component
   useEffect(() => {
     return () => {
+      console.log('🧹 Netejant listeners de Firebase...');
       if (routesListenerRef.current) routesListenerRef.current();
       if (usersListenerRef.current) usersListenerRef.current();
       if (incidentsListenerRef.current) incidentsListenerRef.current();
@@ -473,11 +561,25 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin, mapInst
     };
   }, []);
 
+  // Log d'estat per debug
+  useEffect(() => {
+    console.log('📊 useFirebaseListeners estat:', {
+      routes: routes.length,
+      users: users.length,
+      incidents: incidents.length,
+      allUsers: allUsers.length,
+      loading,
+      error
+    });
+  }, [routes, users, incidents, allUsers, loading, error]);
+
   return {
     routes,
     users,
     incidents,
     allUsers,
+    loading,
+    error,
     loadAllUsers,
     makeUserAdmin,
     deleteRoute,
