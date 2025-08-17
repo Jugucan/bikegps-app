@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 // Firebase imports
 import { initializeApp } from 'firebase/app';
@@ -62,7 +62,7 @@ const BikeGPSApp = () => {
     isReturning
   } = useMap();
 
-  // Location tracking
+  // Location tracking - només inicialitzar quan tenim usuari
   const {
     userLocation,
     locationError,
@@ -91,107 +91,9 @@ const BikeGPSApp = () => {
   const [notification, setNotification] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUploadProgress, setShowUploadProgress] = useState(false);
-  const [followUser, setFollowUser] = useState(true);
-  const [rotateMap, setRotateMap] = useState(true);
-  const [mapControlsExpanded, setMapControlsExpanded] = useState(false);
-  const [debugInfo, setDebugInfo] = useState({});
 
-  // Debug: Log dels estats
-  useEffect(() => {
-    console.log('📊 Estats actualitzats:', {
-      currentUser: currentUser?.email,
-      isAdmin,
-      isSuperAdmin,
-      authLoading,
-      dataLoading,
-      routesCount: routes?.length,
-      usersCount: users?.length,
-      incidentsCount: incidents?.length,
-      authError,
-      dataError
-    });
-  }, [currentUser, isAdmin, isSuperAdmin, authLoading, dataLoading, routes, users, incidents, authError, dataError]);
-
-  // Debug info actualitzada
-  useEffect(() => {
-    const info = {
-      // Estat d'autenticació
-      user: currentUser?.email || 'No autenticat',
-      isAdmin: isAdmin ? '✅' : '❌',
-      isSuperAdmin: isSuperAdmin ? '✅' : '❌',
-      
-      // Estats de càrrega
-      authLoading: authLoading ? '⏳' : '✅',
-      dataLoading: dataLoading ? '⏳' : '✅',
-      
-      // Dades
-      routes: routes?.length || 0,
-      activeUsers: users?.length || 0,
-      allUsers: allUsers?.length || 0,
-      incidents: incidents?.length || 0,
-      
-      // Ubicació
-      userLocation: userLocation ? '📍' : '❌',
-      isTracking: isTracking ? '✅' : '❌',
-      locationError: locationError || 'Cap',
-      
-      // Ruta actual
-      currentRoute: currentRoute?.name || 'Cap',
-      
-      // Errors
-      authError: authError || 'Cap',
-      dataError: dataError || 'Cap'
-    };
-    
-    setDebugInfo(info);
-  }, [
-    currentUser, isAdmin, isSuperAdmin, authLoading, dataLoading,
-    routes, users, allUsers, incidents, userLocation, isTracking,
-    locationError, currentRoute, authError, dataError
-  ]);
-
-  // Initialize location tracking when user logs in
-  useEffect(() => {
-    if (currentUser && !isTracking) {
-      console.log('📍 Iniciant seguiment ubicació per:', currentUser.email);
-      startLocationTracking();
-    }
-  }, [currentUser, isTracking, startLocationTracking]);
-
-  // Refresh data periodically
-  useEffect(() => {
-    if (currentUser && refreshData) {
-      console.log('⏰ Configurant refresc automàtic de dades');
-      const interval = setInterval(() => {
-        console.log('🔄 Refrescant dades automàticament...');
-        refreshData();
-      }, 30000); // Every 30 seconds
-
-      return () => {
-        console.log('🛑 Desactivant refresc automàtic');
-        clearInterval(interval);
-      };
-    }
-  }, [currentUser, refreshData]);
-
-  // Show authentication errors
-  useEffect(() => {
-    if (authError) {
-      console.error('❌ Error d\'autenticació:', authError);
-      showNotification(`Error d'autenticació: ${authError}`, 'error', setNotification);
-    }
-  }, [authError]);
-
-  // Show data errors
-  useEffect(() => {
-    if (dataError) {
-      console.error('❌ Error de dades:', dataError);
-      showNotification(`Error carregant dades: ${dataError}`, 'error', setNotification);
-    }
-  }, [dataError]);
-
-  // Route creation handler
-  const handleCreateRoute = async (e) => {
+  // Memoitzar les funcions per evitar re-renders
+  const handleCreateRoute = useCallback(async (e) => {
     e.preventDefault();
     console.log('📤 Iniciant creació de ruta...');
     
@@ -258,7 +160,7 @@ const BikeGPSApp = () => {
       // Reset form
       e.target.reset();
       
-      // Refresh data
+      // Refresh data després d'un petit delay
       if (refreshData) {
         setTimeout(() => {
           console.log('🔄 Refrescant dades després de crear ruta...');
@@ -277,10 +179,10 @@ const BikeGPSApp = () => {
       console.error('❌ Error creant ruta:', error);
       showNotification('Error creant ruta: ' + error.message, 'error', setNotification);
     }
-  };
+  }, [currentUser, refreshData]);
 
   // Incident reporting
-  const reportIncident = async () => {
+  const reportIncident = useCallback(async () => {
     console.log('🚨 Iniciant report d\'incidència...');
     const message = prompt('Descriu la incidència (opcional):');
     
@@ -327,10 +229,96 @@ const BikeGPSApp = () => {
       console.error('❌ Error reportant incidència:', error);
       showNotification('❌ Error reportant incidència: ' + error.message, 'error', setNotification);
     }
-  };
+  }, [currentUser, getCurrentLocation, userLocation, refreshData]);
 
-  // Enhanced debug panel
-  const DebugPanel = () => {
+  // Debug info memoitzat
+  const debugInfo = useMemo(() => ({
+    // Estat d'autenticació
+    user: currentUser?.email || 'No autenticat',
+    isAdmin: isAdmin ? '✅' : '❌',
+    isSuperAdmin: isSuperAdmin ? '✅' : '❌',
+    
+    // Estats de càrrega
+    authLoading: authLoading ? '⏳' : '✅',
+    dataLoading: dataLoading ? '⏳' : '✅',
+    
+    // Dades
+    routes: routes?.length || 0,
+    activeUsers: users?.length || 0,
+    allUsers: allUsers?.length || 0,
+    incidents: incidents?.length || 0,
+    
+    // Ubicació
+    userLocation: userLocation ? '📍' : '❌',
+    isTracking: isTracking ? '✅' : '❌',
+    locationError: locationError || 'Cap',
+    
+    // Ruta actual
+    currentRoute: currentRoute?.name || 'Cap',
+    
+    // Errors
+    authError: authError || 'Cap',
+    dataError: dataError || 'Cap'
+  }), [currentUser, isAdmin, isSuperAdmin, authLoading, dataLoading, routes, users, allUsers, incidents, userLocation, isTracking, locationError, currentRoute, authError, dataError]);
+
+  // Log dels estats només quan canvien significativament
+  useEffect(() => {
+    console.log('📊 Estats actualitzats:', {
+      currentUser: currentUser?.email,
+      isAdmin,
+      isSuperAdmin,
+      authLoading,
+      dataLoading,
+      routesCount: routes?.length,
+      usersCount: users?.length,
+      incidentsCount: incidents?.length,
+      authError,
+      dataError
+    });
+  }, [currentUser?.uid, isAdmin, isSuperAdmin, authLoading, dataLoading, routes?.length, users?.length, incidents?.length]);
+
+  // Initialize location tracking quan l'usuari es connecta - NOMÉS UNA VEGADA
+  useEffect(() => {
+    if (currentUser && !isTracking) {
+      console.log('📍 Iniciant seguiment ubicació per:', currentUser.email);
+      startLocationTracking();
+    }
+  }, [currentUser?.uid]); // Només depèn de l'UID de l'usuari
+
+  // Refresh automàtic OPTIMITZAT - només quan és necessari
+  useEffect(() => {
+    if (!currentUser || !refreshData) return;
+
+    console.log('⏰ Configurant refresc automàtic de dades');
+    const interval = setInterval(() => {
+      console.log('🔄 Refrescant dades automàticament...');
+      refreshData();
+    }, 30000); // Every 30 seconds
+
+    return () => {
+      console.log('🛑 Desactivant refresc automàtic');
+      clearInterval(interval);
+    };
+  }, [currentUser?.uid, !!refreshData]); // Memoitzat correctament
+
+  // Show authentication errors
+  useEffect(() => {
+    if (authError) {
+      console.error('❌ Error d\'autenticació:', authError);
+      showNotification(`Error d'autenticació: ${authError}`, 'error', setNotification);
+    }
+  }, [authError]);
+
+  // Show data errors
+  useEffect(() => {
+    if (dataError) {
+      console.error('❌ Error de dades:', dataError);
+      showNotification(`Error carregant dades: ${dataError}`, 'error', setNotification);
+    }
+  }, [dataError]);
+
+  // Debug panel component memoitzat
+  const DebugPanel = useMemo(() => {
     if (!isAdmin && !import.meta.env.DEV) return null;
     
     return (
@@ -386,7 +374,7 @@ const BikeGPSApp = () => {
         </button>
       </div>
     );
-  };
+  }, [debugInfo, isAdmin, refreshData]);
 
   // Loading screen
   if (authLoading) {
@@ -415,7 +403,7 @@ const BikeGPSApp = () => {
           handleRegister={handleRegister}
           notification={notification}
         />
-        <DebugPanel />
+        {DebugPanel}
       </>
     );
   }
@@ -460,7 +448,7 @@ const BikeGPSApp = () => {
           notification={notification}
           refreshData={refreshData}
         />
-        <DebugPanel />
+        {DebugPanel}
       </>
     );
   }
@@ -484,7 +472,7 @@ const BikeGPSApp = () => {
         notification={notification}
         refreshData={refreshData}
       />
-      <DebugPanel />
+      {DebugPanel}
     </>
   );
 };
