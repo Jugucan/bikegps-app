@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import './MapMarkers.css'; // Importem els estils dels marcadors
 
 const BikeMap = ({ 
   mapInstanceRef, 
@@ -18,27 +19,27 @@ const BikeMap = ({
   const currentBearingRef = useRef(0);
   const smoothBearingRef = useRef(0);
   
-  // Inicialització del mapa
+  // Inicialitzacio del mapa
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
     try {
-      console.log('🗺️ Inicialitzant BikeMap amb rotació...');
+      console.log('🗺️ Inicialitzant BikeMap amb rotacio...');
       
-      // Crear mapa amb configuració optimitzada per rotació
+      // Crear mapa amb configuracio optimitzada per rotacio
       const map = L.map(mapContainerRef.current, {
         center: [41.6722, 2.4540], // Calella per defecte
-        zoom: 18, // Zoom proper per navegació
-        zoomControl: false, // El movem després
+        zoom: 18, // Zoom proper per navegacio
+        zoomControl: false, // El movem despres
         attributionControl: false,
         
-        // Configuració per rotació suau
+        // Configuracio per rotacio suau
         preferCanvas: true,
         updateWhenZooming: false,
-        updateWhenIdle: false, // Canviat per permetre rotació contínua
+        updateWhenIdle: false,
         
-        // Navegació suau
-        inertia: false, // Desactivem per control total
+        // Navegacio suau
+        inertia: false,
         fadeAnimation: false,
         zoomAnimation: false,
         markerZoomAnimation: false,
@@ -47,15 +48,15 @@ const BikeMap = ({
         touchZoom: true,
         doubleClickZoom: false,
         scrollWheelZoom: false,
-        dragging: false, // Desactivem arrossegament perquè seguim l'usuari
+        dragging: false,
         keyboard: false,
         
-        // Configuració específica per rotació
-        transform3DLimit: 2^23, // Límit alt per transformacions
+        // Configuracio especifica per rotacio
+        transform3DLimit: 2^23,
         worldCopyJump: false
       });
       
-      // Afegir controls en posició personalitzada
+      // Afegir controls en posicio personalitzada
       L.control.zoom({
         position: 'bottomright'
       }).addTo(map);
@@ -64,13 +65,9 @@ const BikeMap = ({
       const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19,
-        
-        // Optimitzacions per rotació
         updateWhenIdle: false,
         updateWhenZooming: false,
-        keepBuffer: 4, // Més buffer per rotacions
-        
-        // Càrrega més agressiva
+        keepBuffer: 4,
         crossOrigin: true,
         opacity: 1
       });
@@ -85,7 +82,7 @@ const BikeMap = ({
       mapInstanceRef.current = map;
       setMapReady(true);
       
-      console.log('✅ BikeMap amb rotació inicialitzat correctament');
+      console.log('✅ BikeMap amb rotacio inicialitzat correctament');
       
       // Cleanup
       return () => {
@@ -100,7 +97,7 @@ const BikeMap = ({
     }
   }, []);
 
-  // Funció per rotar el mapa suaument
+  // Funcio per rotar el mapa suaument
   const rotateMap = (targetBearing) => {
     if (!mapInstanceRef.current) return;
     
@@ -111,16 +108,16 @@ const BikeMap = ({
     const normalizedBearing = ((targetBearing % 360) + 360) % 360;
     const currentBearing = smoothBearingRef.current;
     
-    // Calcular la diferència més curta entre angles
+    // Calcular la diferencia mes curta entre angles
     let diff = normalizedBearing - currentBearing;
     if (diff > 180) diff -= 360;
     if (diff < -180) diff += 360;
     
-    // Interpolació suau
-    const newBearing = currentBearing + diff * 0.15; // Suavitzat més agressiu
+    // Interpolacio suau
+    const newBearing = currentBearing + diff * 0.15;
     smoothBearingRef.current = newBearing;
     
-    // Aplicar rotació al mapPane
+    // Aplicar rotacio al mapPane
     mapPane.style.transform = `rotate(${-newBearing}deg)`;
     
     // També rotar els controls per mantenir-los llegibles
@@ -130,13 +127,13 @@ const BikeMap = ({
     });
   };
 
-  // Gestió de la ubicació de l'usuari amb centrat i rotació
+  // Gestio de la ubicacio de l'usuari amb centrat i rotacio
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || !userLocation) return;
     
     const now = Date.now();
-    // Throttling més freqüent per rotació suau
-    if (now - lastUpdateRef.current < 500) return; // Cada 0.5 segons
+    // Throttling mes frequent per rotacio suau
+    if (now - lastUpdateRef.current < 500) return;
     lastUpdateRef.current = now;
     
     const map = mapInstanceRef.current;
@@ -165,29 +162,29 @@ const BikeMap = ({
         
         console.log('📍 Marcador d\'usuari fix creat');
       } else {
-        // Actualitzar posició
+        // Actualitzar posicio
         userMarkerRef.current.setLatLng([latitude, longitude]);
       }
       
-      // SEMPRE centrar el mapa a la posició de l'usuari
+      // SEMPRE centrar el mapa a la posicio de l'usuari
       if (followUser) {
         map.setView([latitude, longitude], map.getZoom(), {
-          animate: false // Sense animació per evitar conflictes amb la rotació
+          animate: false
         });
       }
       
-      // Rotar el mapa basant-se en la direcció de l'usuari
+      // Rotar el mapa basant-se en la direccio de l'usuari
       if (showUserDirection && heading !== undefined && heading !== null) {
         currentBearingRef.current = heading;
         rotateMap(heading);
       }
       
     } catch (error) {
-      console.error('❌ Error actualitzant ubicació usuari:', error);
+      console.error('❌ Error actualitzant ubicacio usuari:', error);
     }
   }, [mapReady, userLocation, followUser, showUserDirection]);
 
-  // Gestió de la ruta actual (amb rotació)
+  // Gestio de la ruta actual (amb rotacio)
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
     
@@ -213,7 +210,7 @@ const BikeMap = ({
         
         console.log(`✅ Ruta "${currentRoute.name}" carregada amb ${coordinates.length} punts`);
         
-        // Si no tenim ubicació d'usuari, centrar a la ruta
+        // Si no tenim ubicacio d'usuari, centrar a la ruta
         if (!userLocation) {
           const group = new L.featureGroup([routePolylineRef.current]);
           map.fitBounds(group.getBounds(), { 
@@ -228,13 +225,13 @@ const BikeMap = ({
     }
   }, [mapReady, currentRoute]);
 
-  // Forçar resize i configuració inicial quan el component es munta
+  // Forçar resize i configuracio inicial quan el component es munta
   useEffect(() => {
     if (mapReady && mapInstanceRef.current) {
       const timer = setTimeout(() => {
         mapInstanceRef.current.invalidateSize();
         
-        // Configurar transformOrigin després de la inicialització
+        // Configurar transformOrigin despres de la inicialitzacio
         const mapContainer = mapContainerRef.current;
         const mapPane = mapInstanceRef.current.getPanes().mapPane;
         
@@ -246,7 +243,7 @@ const BikeMap = ({
     }
   }, [mapReady]);
 
-  // Bucle d'animació per rotació suau contínua
+  // Bucle d'animacio per rotacio suau continua
   useEffect(() => {
     if (!mapReady) return;
     
@@ -255,7 +252,7 @@ const BikeMap = ({
     const animate = () => {
       if (showUserDirection && currentBearingRef.current !== smoothBearingRef.current) {
         const diff = Math.abs(currentBearingRef.current - smoothBearingRef.current);
-        if (diff > 0.1) { // Només animar si hi ha diferència significativa
+        if (diff > 0.1) {
           rotateMap(currentBearingRef.current);
         }
       }
@@ -271,9 +268,24 @@ const BikeMap = ({
     };
   }, [mapReady, showUserDirection]);
 
+  // Funcion per recentrar el mapa manualment
+  const recenterMap = () => {
+    if (mapInstanceRef.current && userLocation) {
+      mapInstanceRef.current.setView([userLocation.latitude, userLocation.longitude], 18, {
+        animate: true
+      });
+    }
+  };
+
+  // Funcion per alternar seguiment
+  const toggleFollowUser = () => {
+    // Aquesta funció es pot usar des del component pare
+    return !followUser;
+  };
+
   return (
     <>
-      {/* Contenidor del mapa amb rotació */}
+      {/* Contenidor del mapa amb rotacio */}
       <div 
         className="bike-map-container-rotating"
         style={{
@@ -294,7 +306,7 @@ const BikeMap = ({
           }}
         />
         
-        {/* Indicador de càrrega */}
+        {/* Indicador de carrega */}
         {!mapReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
             <div className="text-center">
@@ -304,48 +316,90 @@ const BikeMap = ({
           </div>
         )}
         
-        {/* Compassos fix (sempre apunta al nord) */}
+        {/* Controls personalitzats */}
         {mapReady && (
-          <div 
-            className="absolute top-3 left-3 w-12 h-12 bg-white bg-opacity-90 rounded-full shadow-lg flex items-center justify-center"
-            style={{
-              transform: `rotate(${smoothBearingRef.current}deg)`,
-              transition: 'transform 0.3s ease-out'
-            }}
-            title={`Nord: ${Math.round(smoothBearingRef.current)}°`}
-          >
-            <div className="text-red-600 font-bold text-lg">N</div>
-          </div>
+          <>
+            {/* Compassos fix (sempre apunta al nord) */}
+            <div 
+              className="absolute top-3 left-3 w-12 h-12 bg-white bg-opacity-90 rounded-full shadow-lg flex items-center justify-content center cursor-pointer hover:bg-opacity-100 transition-all"
+              style={{
+                transform: `rotate(${smoothBearingRef.current}deg)`,
+                transition: 'transform 0.3s ease-out'
+              }}
+              title={`Nord: ${Math.round(smoothBearingRef.current)}°`}
+              onClick={() => {
+                // Reset rotacio
+                currentBearingRef.current = 0;
+                smoothBearingRef.current = 0;
+                rotateMap(0);
+              }}
+            >
+              <div className="text-red-600 font-bold text-lg">N</div>
+            </div>
+
+            {/* Boto per recentrar */}
+            {userLocation && (
+              <button
+                onClick={recenterMap}
+                className="absolute top-3 right-3 w-10 h-10 bg-white bg-opacity-90 rounded-full shadow-lg flex items-center justify-center hover:bg-opacity-100 transition-all text-blue-600"
+                title="Recentrar al meu ubicació"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+              </button>
+            )}
+          </>
         )}
         
-        {/* Velocitat i direcció info */}
+        {/* Informacio de velocitat i direccio */}
         {userLocation && (
-          <div className="absolute top-2 right-2 bg-black bg-opacity-70 text-white text-xs px-3 py-2 rounded-lg">
-            <div className="text-center">
-              <div>📍 {userLocation.latitude.toFixed(5)}</div>
-              <div>📍 {userLocation.longitude.toFixed(5)}</div>
+          <div className="absolute bottom-3 left-3 bg-black bg-opacity-70 text-white text-xs px-3 py-2 rounded-lg">
+            <div className="text-center space-y-1">
+              <div className="flex items-center space-x-1">
+                <span>📍</span>
+                <span>{userLocation.latitude.toFixed(5)}, {userLocation.longitude.toFixed(5)}</span>
+              </div>
               {userLocation.speed !== null && userLocation.speed >= 0 && (
-                <div>🚴 {Math.round(userLocation.speed * 3.6)} km/h</div>
+                <div className="flex items-center space-x-1">
+                  <span>🚴</span>
+                  <span>{Math.round(userLocation.speed * 3.6)} km/h</span>
+                </div>
               )}
               {userLocation.heading !== null && (
-                <div>🧭 {Math.round(userLocation.heading)}°</div>
+                <div className="flex items-center space-x-1">
+                  <span>🧭</span>
+                  <span>{Math.round(userLocation.heading)}°</span>
+                </div>
               )}
-              <div className="text-green-400">±{Math.round(userLocation.accuracy)}m</div>
+              <div className="flex items-center space-x-1">
+                <span className="text-green-400">📡</span>
+                <span className="text-green-400">±{Math.round(userLocation.accuracy)}m</span>
+              </div>
             </div>
           </div>
         )}
+
+        {/* Status de seguiment */}
+        <div className="absolute bottom-3 right-3 bg-black bg-opacity-70 text-white text-xs px-2 py-1 rounded">
+          {followUser ? (
+            <span className="text-green-400">🎯 Seguint</span>
+          ) : (
+            <span className="text-yellow-400">👁️ Lliure</span>
+          )}
+        </div>
         
-        {/* Punt central fix (opcional, per debug) */}
+        {/* Punt central fix (per debug) */}
         {process.env.NODE_ENV === 'development' && (
           <div 
-            className="absolute top-1/2 left-1/2 w-1 h-1 bg-red-500 rounded-full z-50"
+            className="absolute top-1/2 left-1/2 w-1 h-1 bg-red-500 rounded-full z-50 pointer-events-none"
             style={{ transform: 'translate(-50%, -50%)' }}
             title="Centre del mapa"
           />
         )}
       </div>
       
-      {/* Estils CSS específics per mapa rotatiu */}
+      {/* Estils CSS especifics per mapa rotatiu */}
       <style jsx>{`
         .user-location-marker-fixed {
           background: none;
@@ -401,6 +455,7 @@ const BikeMap = ({
           line-height: 34px !important;
           font-size: 18px !important;
           font-weight: bold !important;
+          transition: background-color 0.2s ease;
         }
         
         .leaflet-control-zoom a:hover {
@@ -424,6 +479,29 @@ const BikeMap = ({
         /* Evitar que elements surtin del contenidor */
         .bike-map-container-rotating {
           contain: layout style paint;
+        }
+
+        /* Animacions suaus per controls */
+        .absolute button, .absolute div {
+          transition: all 0.2s ease;
+        }
+
+        .absolute button:hover {
+          transform: scale(1.05);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .absolute.bottom-3.left-3 {
+            font-size: 10px;
+            padding: 6px 8px;
+          }
+          
+          .absolute.top-3.left-3,
+          .absolute.top-3.right-3 {
+            width: 40px;
+            height: 40px;
+          }
         }
       `}</style>
     </>
