@@ -71,7 +71,7 @@ const BikeGPSApp = () => {
     getCurrentLocation
   } = useLocation(currentUser);
 
-  // Firebase listeners - CORRECCIÓ: Passar dependències correctes
+  // Firebase listeners - CORRECCIÓ: Simplificar i assegurar que funciona
   const {
     routes,
     users,
@@ -109,10 +109,22 @@ const BikeGPSApp = () => {
       }, { merge: true });
       
       console.log('✅ Usuari registrat/actualitzat a Firestore:', user.email);
+      
+      // CORRECCIÓ: També actualitzar userLocations per ser visible en el mapa
+      if (userLocation) {
+        const locationRef = doc(db, 'userLocations', user.uid);
+        await setDoc(locationRef, {
+          userId: user.uid,
+          userName: user.displayName || user.email?.split('@')[0] || 'Usuari',
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          timestamp: serverTimestamp()
+        }, { merge: true });
+      }
     } catch (error) {
       console.error('❌ Error registrant usuari a Firestore:', error);
     }
-  }, []);
+  }, [userLocation]);
 
   // CORRECCIÓ: Registrar usuari quan es connecta
   useEffect(() => {
@@ -165,14 +177,22 @@ const BikeGPSApp = () => {
         throw new Error('El GPX ha de contenir almenys 2 punts per formar una ruta');
       }
       
+      // CORRECCIÓ: Assegurar format consistent de coordenades
+      const coordinateObjects = coordinates.map(coord => {
+        if (Array.isArray(coord)) {
+          return { lat: coord[0], lng: coord[1] };
+        }
+        return coord; // ja està en format {lat, lng}
+      });
+      
       const routeData = {
         name,
         description: description || 'Sense descripció',
-        coordinates,
+        coordinates: coordinateObjects,
         createdBy: currentUser.uid,
         createdByName: currentUser.displayName || currentUser.email || 'Usuari',
         gpxFileName: gpxFile.name,
-        pointsCount: coordinates.length,
+        pointsCount: coordinateObjects.length,
         deleted: false,
         active: true,
         createdAt: serverTimestamp(),
@@ -184,7 +204,7 @@ const BikeGPSApp = () => {
       console.log('✅ Ruta guardada amb ID:', docRef.id);
 
       setUploadProgress(100);
-      showNotification(`✅ Ruta "${name}" creada correctament amb ${coordinates.length} punts!`, 'success', setNotification);
+      showNotification(`✅ Ruta "${name}" creada correctament amb ${coordinateObjects.length} punts!`, 'success', setNotification);
 
       // Reset form
       e.target.reset();
@@ -272,11 +292,11 @@ const BikeGPSApp = () => {
     authLoading: authLoading ? '⏳' : '✅',
     dataLoading: dataLoading ? '⏳' : '✅',
     
-    // Dades
-    routes: Array.isArray(routes) ? routes.length : 0,
-    activeUsers: Array.isArray(users) ? users.length : 0,
-    allUsers: Array.isArray(allUsers) ? allUsers.length : 0,
-    incidents: Array.isArray(incidents) ? incidents.length : 0,
+    // Dades - CORRECCIÓ: Verificar si són arrays vàlids
+    routes: (routes && Array.isArray(routes)) ? routes.length : 0,
+    activeUsers: (users && Array.isArray(users)) ? users.length : 0,
+    allUsers: (allUsers && Array.isArray(allUsers)) ? allUsers.length : 0,
+    incidents: (incidents && Array.isArray(incidents)) ? incidents.length : 0,
     
     // Ubicació
     userLocation: userLocation ? '📍' : '❌',
@@ -299,9 +319,9 @@ const BikeGPSApp = () => {
       isSuperAdmin,
       authLoading,
       dataLoading,
-      routesCount: Array.isArray(routes) ? routes.length : 0,
-      usersCount: Array.isArray(users) ? users.length : 0,
-      incidentsCount: Array.isArray(incidents) ? incidents.length : 0,
+      routesCount: (routes && Array.isArray(routes)) ? routes.length : 0,
+      usersCount: (users && Array.isArray(users)) ? users.length : 0,
+      incidentsCount: (incidents && Array.isArray(incidents)) ? incidents.length : 0,
       authError,
       dataError
     });
@@ -455,8 +475,8 @@ const BikeGPSApp = () => {
     );
   }
 
-  // Data loading screen (after auth)
-  if (dataLoading && !initializationComplete) {
+  // Data loading screen (after auth) - CORRECCIÓ: Reduir temps d'espera
+  if (dataLoading && !initializationComplete && routes === null) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{background: '#f0f0f3'}}>
         <div className="text-center">
@@ -465,9 +485,9 @@ const BikeGPSApp = () => {
           <p className="text-sm text-gray-500">Sincronitzant amb Firebase...</p>
           <p className="text-xs text-gray-400 mt-2">Usuari: {currentUser.email}</p>
           <div className="mt-4 text-xs text-gray-500">
-            <div>Rutes: {Array.isArray(routes) ? routes.length : '⏳'}</div>
-            <div>Usuaris: {Array.isArray(users) ? users.length : '⏳'}</div>
-            <div>Incidències: {Array.isArray(incidents) ? incidents.length : '⏳'}</div>
+            <div>Rutes: {(routes && Array.isArray(routes)) ? routes.length : '⏳'}</div>
+            <div>Usuaris: {(users && Array.isArray(users)) ? users.length : '⏳'}</div>
+            <div>Incidències: {(incidents && Array.isArray(incidents)) ? incidents.length : '⏳'}</div>
           </div>
         </div>
       </div>
