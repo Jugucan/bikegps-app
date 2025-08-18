@@ -3,22 +3,23 @@ import {
   collection, 
   onSnapshot, 
   query, 
-  orderBy, 
   where, 
   doc, 
   updateDoc, 
   deleteDoc,
   setDoc,
   serverTimestamp,
-  getDocs
+  getDocs,
+  limit,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from '../App';
 
 export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
   // Estados para los datos
-  const [routes, setRoutes] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [incidents, setIncidents] = useState([]);
+  const [routes, setRoutes] = useState(null); // null indica no inicializado
+  const [users, setUsers] = useState(null);
+  const [incidents, setIncidents] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   
   // Estados de control
@@ -26,42 +27,63 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
   const [error, setError] = useState(null);
   const [listenersActive, setListenersActive] = useState(false);
 
-  console.log('🔥 useFirebaseListeners inicialitzant...', {
+  console.log('🔥 useFirebaseListeners inicializando...', {
     hasUser: !!currentUser,
     userEmail: currentUser?.email,
     isAdmin,
     isSuperAdmin
   });
 
+  // CORRECCIÓ: Reset error després d'un temps
+  const clearError = useCallback(() => {
+    setTimeout(() => setError(null), 5000);
+  }, []);
+
   // CORRECCIÓ: Funcions helper per gestionar errors
   const handleFirestoreError = useCallback((error, context) => {
     console.error(`❌ Error Firestore (${context}):`, error);
     
+    let errorMessage;
     if (error.code === 'permission-denied') {
-      setError(`Permisos insuficients per ${context}`);
+      errorMessage = `Permisos insuficients per ${context}`;
     } else if (error.code === 'unavailable') {
-      setError('Servei temporalment no disponible');
+      errorMessage = 'Servei temporalment no disponible';
     } else if (error.code === 'failed-precondition') {
-      setError(`Index requerit per ${context} - creant automàticament...`);
-      console.warn(`⚠️ Index requerit per ${context}. Crea l'index a Firebase Console.`);
+      errorMessage = `Base de dades configurant-se...`;
+      console.warn(`⚠️ Possible index requerit per ${context}`);
     } else {
-      setError(`Error ${context}: ${error.message}`);
+      errorMessage = `Error ${context}`;
     }
-  }, []);
+    
+    setError(errorMessage);
+    clearError();
+  }, [clearError]);
 
-  // CORRECCIÓ: Assegurar que l'usuari està registrat
+  // CORRECCIÓ: Assegurar que l'usuari està registrat de manera més robusta
   const ensureUserInFirestore = useCallback(async (user) => {
     if (!user) return;
     
     try {
+      console.log('👤 Registrant/actualitzant usuari:', user.email);
+      
       const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
+      const userData = {
         uid: user.uid,
         email: user.email,
         displayName: user.displayName || user.email?.split('@')[0] || 'Usuari',
         lastSeen: serverTimestamp(),
-        isOnline: true
-      }, { merge: true });
+        isOnline: true,
+        updatedAt: serverTimestamp()
+      };
+
+      // Si és el primer cop, afegir createdAt
+      if (!user.metadata?.creationTime || 
+          (Date.now() - new Date(user.metadata.creationTime).getTime()) < 60000) {
+        userData.createdAt = serverTimestamp();
+      }
+
+      await setDoc(userRef, userData, { merge: true });
+      console.log('✅ Usuari actualitzat a Firestore');
       
       // Si és el super admin, assegurar document admin
       if (user.uid === 's1UefGdgQphElib4KWmDsQj1uor2') {
@@ -72,17 +94,30 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
           isSuperAdmin: true,
           createdAt: serverTimestamp()
         }, { merge: true });
-        console.log('✅ Super admin registrat');
+        console.log('✅ Super admin confirmat');
       }
       
     } catch (error) {
       console.error('❌ Error registrant usuari:', error);
+      // No bloquejar la app si no es pot registrar l'usuari
     }
   }, []);
 
-  // Setup de listeners
+  // CORRECCIÓ: Setup de listeners més robust
   useEffect(() => {
-    if (!currentUser || listenersActive) return;
+    if (!currentUser) {
+      // Reset quan no hi ha usuari
+      setRoutes([]);
+      setUsers([]);
+      setIncidents([]);
+      setAllUsers([]);
+      setLoading(false);
+      setError(null);
+      setListenersActive(false);
+      return;
+    }
+
+    if (listenersActive) return;
 
     console.log('🚀 Configurant listeners Firebase per:', currentUser.email);
     setLoading(true);
@@ -91,122 +126,159 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
     // Primer assegurem que l'usuari està registrat
     ensureUserInFirestore(currentUser).then(() => {
       const unsubscribers = [];
+      let listenersSetup = 0;
+      const totalListeners = 3;
+
+      const checkAllListenersReady = () => {
+        listenersSetup++;
+        if (listenersSetup >= totalListeners) {
+          setLoading(false);
+          setListenersActive(true);
+          console.log('✅ Tots els listeners configurats');
+        }
+      };
 
       try {
-        // 1. Listener per RUTES - QUERY SIMPLIFICADA
-        console.log('📍 Configurant listener per rutes...');
+        // 1. LISTENER RUTES - Query super simple
+        console.log('📍 Configurant listener rutes...');
         
-        // OPCIÓ 1: Query simple sense orderBy per evitar errors d'index
-        const routesQuery = query(
-          collection(db, 'routes'),
-          where('active', '==', true)
-        );
-
-        const unsubRoutes = onSnapshot(routesQuery, 
+        const routesRef = collection(db, 'routes');
+        
+        const unsubRoutes = onSnapshot(routesRef, 
           (snapshot) => {
-            const routesData = [];
-            snapshot.forEach((doc) => {
-              const data = doc.data();
-              routesData.push({
-                id: doc.id,
-                ...data
+            try {
+              const routesData = [];
+              snapshot.forEach((doc) => {
+                const data = doc.data();
+                // Filtrar només rutes actives en el client
+                if (data.active !== false && data.deleted !== true) {
+                  routesData.push({
+                    id: doc.id,
+                    ...data
+                  });
+                }
               });
-            });
-            
-            // Ordenar en el client per evitar problemes d'index
-            routesData.sort((a, b) => {
-              if (a.createdAt && b.createdAt) {
-                return b.createdAt.seconds - a.createdAt.seconds;
-              }
-              return 0;
-            });
-            
-            console.log('📍 Rutes actualitzades:', routesData.length);
-            setRoutes(routesData);
+              
+              // Ordenar per data de creació (client-side)
+              routesData.sort((a, b) => {
+                const aTime = a.createdAt?.seconds || 0;
+                const bTime = b.createdAt?.seconds || 0;
+                return bTime - aTime;
+              });
+              
+              console.log('📍 Rutes carregades:', routesData.length);
+              setRoutes(routesData);
+              checkAllListenersReady();
+            } catch (err) {
+              console.error('Error processant rutes:', err);
+              setRoutes([]);
+              checkAllListenersReady();
+            }
           },
           (error) => {
             console.error('❌ Error listener rutes:', error);
             handleFirestoreError(error, 'carregant rutes');
-            // Continuar amb array buit en cas d'error
             setRoutes([]);
+            checkAllListenersReady();
           }
         );
         unsubscribers.push(unsubRoutes);
 
-        // 2. Listener per USUARIS ACTIUS - QUERY SIMPLIFICADA
-        console.log('👥 Configurant listener per usuaris actius...');
+        // 2. LISTENER USUARIS - Query simple
+        console.log('👥 Configurant listener usuaris...');
         
-        // OPCIÓ 1: Query simple sense orderBy
-        const usersQuery = query(
-          collection(db, 'users'),
-          where('isOnline', '==', true)
-        );
-
-        const unsubUsers = onSnapshot(usersQuery,
+        const usersRef = collection(db, 'users');
+        
+        const unsubUsers = onSnapshot(usersRef,
           (snapshot) => {
-            const usersData = [];
-            snapshot.forEach((doc) => {
-              const data = doc.data();
-              usersData.push({
-                id: doc.id,
-                ...data
+            try {
+              const usersData = [];
+              const now = Timestamp.now();
+              const fiveMinutesAgo = Timestamp.fromMillis(now.toMillis() - 5 * 60 * 1000);
+              
+              snapshot.forEach((doc) => {
+                const data = doc.data();
+                // Considerar usuari actiu si ha estat online recentment
+                const isRecentlyActive = data.lastSeen && 
+                  data.lastSeen.seconds > fiveMinutesAgo.seconds;
+                
+                if (isRecentlyActive || data.isOnline) {
+                  usersData.push({
+                    id: doc.id,
+                    ...data
+                  });
+                }
               });
-            });
-            
-            // Ordenar en el client
-            usersData.sort((a, b) => {
-              if (a.lastSeen && b.lastSeen) {
-                return b.lastSeen.seconds - a.lastSeen.seconds;
-              }
-              return 0;
-            });
-            
-            console.log('👥 Usuaris actius actualitzats:', usersData.length);
-            setUsers(usersData);
+              
+              // Ordenar per últim vist
+              usersData.sort((a, b) => {
+                const aTime = a.lastSeen?.seconds || 0;
+                const bTime = b.lastSeen?.seconds || 0;
+                return bTime - aTime;
+              });
+              
+              console.log('👥 Usuaris actius:', usersData.length);
+              setUsers(usersData);
+              checkAllListenersReady();
+            } catch (err) {
+              console.error('Error processant usuaris:', err);
+              setUsers([]);
+              checkAllListenersReady();
+            }
           },
           (error) => {
             console.error('❌ Error listener usuaris:', error);
-            handleFirestoreError(error, 'carregant usuaris actius');
-            // Continuar amb array buit en cas d'error
+            handleFirestoreError(error, 'carregant usuaris');
             setUsers([]);
+            checkAllListenersReady();
           }
         );
         unsubscribers.push(unsubUsers);
 
-        // 3. Listener per INCIDÈNCIES - MANTENINT OrderBy ja que funciona
-        console.log('🚨 Configurant listener per incidències...');
-        const incidentsQuery = query(
-          collection(db, 'incidents'),
-          orderBy('timestamp', 'desc')
-        );
-
-        const unsubIncidents = onSnapshot(incidentsQuery,
+        // 3. LISTENER INCIDÈNCIES - Query simple
+        console.log('🚨 Configurant listener incidències...');
+        
+        const incidentsRef = collection(db, 'incidents');
+        
+        const unsubIncidents = onSnapshot(incidentsRef,
           (snapshot) => {
-            const incidentsData = [];
-            snapshot.forEach((doc) => {
-              incidentsData.push({
-                id: doc.id,
-                ...doc.data()
+            try {
+              const incidentsData = [];
+              snapshot.forEach((doc) => {
+                incidentsData.push({
+                  id: doc.id,
+                  ...doc.data()
+                });
               });
-            });
-            console.log('🚨 Incidències actualitzades:', incidentsData.length);
-            setIncidents(incidentsData);
+              
+              // Ordenar per timestamp (més recent primer)
+              incidentsData.sort((a, b) => {
+                const aTime = a.timestamp?.seconds || 0;
+                const bTime = b.timestamp?.seconds || 0;
+                return bTime - aTime;
+              });
+              
+              console.log('🚨 Incidències:', incidentsData.length);
+              setIncidents(incidentsData);
+              checkAllListenersReady();
+            } catch (err) {
+              console.error('Error processant incidències:', err);
+              setIncidents([]);
+              checkAllListenersReady();
+            }
           },
           (error) => {
             console.error('❌ Error listener incidències:', error);
             handleFirestoreError(error, 'carregant incidències');
             setIncidents([]);
+            checkAllListenersReady();
           }
         );
         unsubscribers.push(unsubIncidents);
 
-        setListenersActive(true);
-        setLoading(false);
-        console.log('✅ Tots els listeners configurats correctament');
-
       } catch (error) {
         console.error('❌ Error configurant listeners:', error);
-        handleFirestoreError(error, 'configurant listeners');
+        handleFirestoreError(error, 'configurant connexió');
         setLoading(false);
       }
 
@@ -215,26 +287,31 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
         console.log('🧹 Netejant listeners Firebase...');
         unsubscribers.forEach(unsub => {
           if (typeof unsub === 'function') {
-            unsub();
+            try {
+              unsub();
+            } catch (err) {
+              console.warn('Error netejant listener:', err);
+            }
           }
         });
         setListenersActive(false);
       };
+    }).catch(error => {
+      console.error('❌ Error inicialitzant usuari:', error);
+      setLoading(false);
     });
 
   }, [currentUser?.uid, listenersActive, ensureUserInFirestore, handleFirestoreError]);
 
-  // Carregar tots els usuaris (només per admins) - QUERY SIMPLE
+  // Carregar tots els usuaris (només per admins)
   const loadAllUsers = useCallback(async () => {
     if (!isAdmin && !isSuperAdmin) {
-      console.log('⚠️ No és admin - no pot carregar tots els usuaris');
       return;
     }
 
     try {
       console.log('👥 Carregant tots els usuaris...');
       
-      // Query simple sense filtres per evitar problemes
       const usersSnapshot = await getDocs(collection(db, 'users'));
       const allUsersData = [];
       
@@ -245,12 +322,11 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
         });
       });
       
-      // Ordenar en el client
+      // Ordenar per últim vist
       allUsersData.sort((a, b) => {
-        if (a.lastSeen && b.lastSeen) {
-          return b.lastSeen.seconds - a.lastSeen.seconds;
-        }
-        return 0;
+        const aTime = a.lastSeen?.seconds || 0;
+        const bTime = b.lastSeen?.seconds || 0;
+        return bTime - aTime;
       });
       
       console.log('✅ Tots els usuaris carregats:', allUsersData.length);
@@ -258,15 +334,15 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
       
     } catch (error) {
       console.error('❌ Error carregant tots els usuaris:', error);
-      handleFirestoreError(error, 'carregant tots els usuaris');
+      handleFirestoreError(error, 'carregant llista usuaris');
     }
   }, [isAdmin, isSuperAdmin, handleFirestoreError]);
 
   // Fer usuari admin (només super admin)
   const makeUserAdmin = useCallback(async (userId, userEmail) => {
     if (!isSuperAdmin) {
-      console.log('⚠️ No és super admin - no pot crear admins');
       setError('Només el super admin pot crear administradors');
+      clearError();
       return false;
     }
 
@@ -287,22 +363,22 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
       
     } catch (error) {
       console.error('❌ Error fent usuari admin:', error);
-      handleFirestoreError(error, 'fent usuari admin');
+      handleFirestoreError(error, 'assignant permisos admin');
       return false;
     }
-  }, [isSuperAdmin, currentUser, handleFirestoreError]);
+  }, [isSuperAdmin, currentUser, handleFirestoreError, clearError]);
 
   // Eliminar ruta
   const deleteRoute = useCallback(async (routeId) => {
     if (!isAdmin && !isSuperAdmin) {
-      console.log('⚠️ No és admin - no pot eliminar rutes');
+      setError('No tens permisos per eliminar rutes');
+      clearError();
       return false;
     }
 
     try {
       console.log('🗑️ Eliminant ruta:', routeId);
       
-      // Marcar com eliminada en lloc d'eliminar físicament
       const routeRef = doc(db, 'routes', routeId);
       await updateDoc(routeRef, {
         deleted: true,
@@ -319,12 +395,13 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
       handleFirestoreError(error, 'eliminant ruta');
       return false;
     }
-  }, [isAdmin, isSuperAdmin, currentUser, handleFirestoreError]);
+  }, [isAdmin, isSuperAdmin, currentUser, handleFirestoreError, clearError]);
 
   // Resoldre incidència
   const resolveIncident = useCallback(async (incidentId) => {
     if (!isAdmin && !isSuperAdmin) {
-      console.log('⚠️ No és admin - no pot resoldre incidències');
+      setError('No tens permisos per resoldre incidències');
+      clearError();
       return false;
     }
 
@@ -347,19 +424,45 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
       handleFirestoreError(error, 'resolent incidència');
       return false;
     }
-  }, [isAdmin, isSuperAdmin, currentUser, handleFirestoreError]);
+  }, [isAdmin, isSuperAdmin, currentUser, handleFirestoreError, clearError]);
 
   // Refrescar dades manualment
   const refreshData = useCallback(async () => {
-    console.log('🔄 Refrescant dades manualment...');
+    console.log('🔄 Refrescant dades...');
     
-    // Recarregar tots els usuaris si és admin
-    if (isAdmin || isSuperAdmin) {
-      await loadAllUsers();
+    try {
+      // Actualitzar estat de l'usuari actual
+      if (currentUser) {
+        const userRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userRef, {
+          lastSeen: serverTimestamp(),
+          isOnline: true
+        });
+      }
+      
+      // Recarregar tots els usuaris si és admin
+      if (isAdmin || isSuperAdmin) {
+        await loadAllUsers();
+      }
+      
+      console.log('✅ Refrescament completat');
+    } catch (error) {
+      console.warn('⚠️ Error en refrescament parcial:', error);
     }
-    
-    // Actualitzar estat de l'usuari actual
-    if (currentUser) {
+  }, [currentUser, isAdmin, isSuperAdmin, loadAllUsers]);
+
+  // Auto-carregar tots els usuaris per admins
+  useEffect(() => {
+    if ((isAdmin || isSuperAdmin) && currentUser && !loading && listenersActive) {
+      loadAllUsers();
+    }
+  }, [isAdmin, isSuperAdmin, currentUser, loading, listenersActive, loadAllUsers]);
+
+  // CORRECCIÓ: Actualitzar estat usuari periòdicament
+  useEffect(() => {
+    if (!currentUser || !listenersActive) return;
+
+    const updateUserStatus = async () => {
       try {
         const userRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userRef, {
@@ -367,52 +470,21 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
           isOnline: true
         });
       } catch (error) {
-        console.warn('⚠️ No s\'ha pogut actualitzar estat usuari:', error);
+        console.warn('⚠️ Error actualitzant estat usuari:', error);
       }
-    }
+    };
+
+    // Actualitzar cada 30 segons
+    const interval = setInterval(updateUserStatus, 30000);
     
-    console.log('✅ Refrescament completat');
-  }, [isAdmin, isSuperAdmin, loadAllUsers, currentUser]);
-
-  // Cleanup quan l'usuari es desconnecta
-  useEffect(() => {
-    if (!currentUser) {
-      console.log('🧹 Usuari desconnectat - netejant estat');
-      setRoutes([]);
-      setUsers([]);
-      setIncidents([]);
-      setAllUsers([]);
-      setLoading(false);
-      setError(null);
-      setListenersActive(false);
-    }
-  }, [currentUser]);
-
-  // Auto-carregar tots els usuaris per admins
-  useEffect(() => {
-    if ((isAdmin || isSuperAdmin) && currentUser && !loading) {
-      loadAllUsers();
-    }
-  }, [isAdmin, isSuperAdmin, currentUser, loading, loadAllUsers]);
-
-  // Debug logging
-  useEffect(() => {
-    console.log('📊 useFirebaseListeners estat:', {
-      loading,
-      error,
-      listenersActive,
-      routesCount: routes.length,
-      usersCount: users.length,
-      incidentsCount: incidents.length,
-      allUsersCount: allUsers.length
-    });
-  }, [loading, error, listenersActive, routes.length, users.length, incidents.length, allUsers.length]);
+    return () => clearInterval(interval);
+  }, [currentUser, listenersActive]);
 
   return {
     // Dades
-    routes,
-    users,
-    incidents,
+    routes: routes || [], // Sempre retornar array
+    users: users || [],
+    incidents: incidents || [],
     allUsers,
     
     // Estats
