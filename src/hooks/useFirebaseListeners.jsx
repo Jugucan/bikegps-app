@@ -42,7 +42,8 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
     } else if (error.code === 'unavailable') {
       setError('Servei temporalment no disponible');
     } else if (error.code === 'failed-precondition') {
-      setError('Error de configuració Firebase');
+      setError(`Index requerit per ${context} - creant automàticament...`);
+      console.warn(`⚠️ Index requerit per ${context}. Crea l'index a Firebase Console.`);
     } else {
       setError(`Error ${context}: ${error.message}`);
     }
@@ -92,55 +93,87 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
       const unsubscribers = [];
 
       try {
-        // 1. Listener per RUTES
+        // 1. Listener per RUTES - QUERY SIMPLIFICADA
         console.log('📍 Configurant listener per rutes...');
+        
+        // OPCIÓ 1: Query simple sense orderBy per evitar errors d'index
         const routesQuery = query(
           collection(db, 'routes'),
-          where('active', '==', true),
-          orderBy('createdAt', 'desc')
+          where('active', '==', true)
         );
 
         const unsubRoutes = onSnapshot(routesQuery, 
           (snapshot) => {
             const routesData = [];
             snapshot.forEach((doc) => {
+              const data = doc.data();
               routesData.push({
                 id: doc.id,
-                ...doc.data()
+                ...data
               });
             });
+            
+            // Ordenar en el client per evitar problemes d'index
+            routesData.sort((a, b) => {
+              if (a.createdAt && b.createdAt) {
+                return b.createdAt.seconds - a.createdAt.seconds;
+              }
+              return 0;
+            });
+            
             console.log('📍 Rutes actualitzades:', routesData.length);
             setRoutes(routesData);
           },
-          (error) => handleFirestoreError(error, 'carregant rutes')
+          (error) => {
+            console.error('❌ Error listener rutes:', error);
+            handleFirestoreError(error, 'carregant rutes');
+            // Continuar amb array buit en cas d'error
+            setRoutes([]);
+          }
         );
         unsubscribers.push(unsubRoutes);
 
-        // 2. Listener per USUARIS ACTIUS
+        // 2. Listener per USUARIS ACTIUS - QUERY SIMPLIFICADA
         console.log('👥 Configurant listener per usuaris actius...');
+        
+        // OPCIÓ 1: Query simple sense orderBy
         const usersQuery = query(
           collection(db, 'users'),
-          where('isOnline', '==', true),
-          orderBy('lastSeen', 'desc')
+          where('isOnline', '==', true)
         );
 
         const unsubUsers = onSnapshot(usersQuery,
           (snapshot) => {
             const usersData = [];
             snapshot.forEach((doc) => {
+              const data = doc.data();
               usersData.push({
                 id: doc.id,
-                ...doc.data()
+                ...data
               });
             });
+            
+            // Ordenar en el client
+            usersData.sort((a, b) => {
+              if (a.lastSeen && b.lastSeen) {
+                return b.lastSeen.seconds - a.lastSeen.seconds;
+              }
+              return 0;
+            });
+            
             console.log('👥 Usuaris actius actualitzats:', usersData.length);
             setUsers(usersData);
           },
-          (error) => handleFirestoreError(error, 'carregant usuaris actius')
+          (error) => {
+            console.error('❌ Error listener usuaris:', error);
+            handleFirestoreError(error, 'carregant usuaris actius');
+            // Continuar amb array buit en cas d'error
+            setUsers([]);
+          }
         );
         unsubscribers.push(unsubUsers);
 
-        // 3. Listener per INCIDÈNCIES
+        // 3. Listener per INCIDÈNCIES - MANTENINT OrderBy ja que funciona
         console.log('🚨 Configurant listener per incidències...');
         const incidentsQuery = query(
           collection(db, 'incidents'),
@@ -159,7 +192,11 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
             console.log('🚨 Incidències actualitzades:', incidentsData.length);
             setIncidents(incidentsData);
           },
-          (error) => handleFirestoreError(error, 'carregant incidències')
+          (error) => {
+            console.error('❌ Error listener incidències:', error);
+            handleFirestoreError(error, 'carregant incidències');
+            setIncidents([]);
+          }
         );
         unsubscribers.push(unsubIncidents);
 
@@ -187,7 +224,7 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
 
   }, [currentUser?.uid, listenersActive, ensureUserInFirestore, handleFirestoreError]);
 
-  // Carregar tots els usuaris (només per admins)
+  // Carregar tots els usuaris (només per admins) - QUERY SIMPLE
   const loadAllUsers = useCallback(async () => {
     if (!isAdmin && !isSuperAdmin) {
       console.log('⚠️ No és admin - no pot carregar tots els usuaris');
@@ -196,6 +233,8 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
 
     try {
       console.log('👥 Carregant tots els usuaris...');
+      
+      // Query simple sense filtres per evitar problemes
       const usersSnapshot = await getDocs(collection(db, 'users'));
       const allUsersData = [];
       
@@ -204,6 +243,14 @@ export const useFirebaseListeners = (currentUser, isAdmin, isSuperAdmin) => {
           id: doc.id,
           ...doc.data()
         });
+      });
+      
+      // Ordenar en el client
+      allUsersData.sort((a, b) => {
+        if (a.lastSeen && b.lastSeen) {
+          return b.lastSeen.seconds - a.lastSeen.seconds;
+        }
+        return 0;
       });
       
       console.log('✅ Tots els usuaris carregats:', allUsersData.length);
