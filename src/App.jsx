@@ -1,552 +1,209 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-
-// Firebase imports
+import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 
-// Components
-import AuthScreen from './components/AuthScreen';
-import BikeMap from './components/BikeMap';
-import AdminDashboard from './components/AdminDashboard';
-import UserDashboard from './components/UserDashboard';
+// Importa els nous components de pàgina
+import Dashboard from './components/dashboard/Dashboard.jsx';
+import Programs from './components/programs/Programs.jsx';
+import ProgramDetail from './components/programs/ProgramDetail.jsx';
+import Schedule from './components/schedule/Schedule.jsx';
+import Users from './components/users/Users.jsx';
+import GymsAndHolidays from './components/gyms_holidays/GymsAndHolidays.jsx';
+import Mixes from './components/mixes/Mixes.jsx';
+import Settings from './components/settings/Settings.jsx';
+import FixedScheduleManagement from './components/schedule/FixedScheduleManagement.jsx';
+import RecurringSessions from './components/schedule/RecurringSessions.jsx';
+import MonthlyReport from './components/reports/MonthlyReport.jsx';
 
-// Hooks
-import { useAuth } from './hooks/useAuth';
-import { useMap } from './hooks/useMap';
-import { useLocation } from './hooks/useLocation';
-import { useFirebaseListeners } from './hooks/useFirebaseListeners';
+// Importa els helpers i hooks
+import useFirestoreData from './hooks/useFirestoreData.js';
+import { MessageModal } from './components/common/MessageModal.jsx'; // Ensure MessageModal is exported correctly
 
-// Utils
-import { showNotification } from './utils/mapUtils';
-import { parseGPX } from './utils/gpxUtils';
 
-// Firebase Configuration
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
-};
+function App() {
+  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [selectedProgramId, setSelectedProgramId] = useState(null);
+  const [isFirebaseReady, setIsFirebaseReady] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Carregant dades...');
+  
+  const [dbInstance, setDbInstance] = useState(null);
+  const [authInstance, setAuthInstance] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [appId, setAppId] = useState(null);
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messageModalContent, setMessageModalContent] = useState({ title: '', message: '', isConfirm: false, onConfirm: () => {}, onCancel: () => {} });
 
-const SUPER_ADMIN_UID = 's1UefGdgQphElib4KWmDsQj1uor2';
-
-const BikeGPSApp = () => {
-  console.log('🚀 BikeGPSApp renderitzant...');
-
-  // Auth state
-  const {
-    currentUser,
-    isAdmin,
-    isSuperAdmin,
-    loading: authLoading,
-    error: authError,
-    handleLogin,
-    handleRegister,
-    handleLogout
-  } = useAuth(SUPER_ADMIN_UID);
-
-  // Map state
-  const {
-    mapInstanceRef,
-    currentRoute,
-    selectRoute,
-    routeProgress,
-    isReturning
-  } = useMap();
-
-  // Location tracking - només inicialitzar quan tenim usuari
-  const {
-    userLocation,
-    locationError,
-    isTracking,
-    startLocationTracking,
-    getCurrentLocation
-  } = useLocation(currentUser);
-
-  // Firebase listeners - CORRECCIÓ: Simplificar i assegurar que funciona
-  const {
-    routes,
-    users,
-    incidents,
-    allUsers,
-    loading: dataLoading,
-    error: dataError,
-    loadAllUsers,
-    makeUserAdmin,
-    deleteRoute,
-    resolveIncident,
-    refreshData
-  } = useFirebaseListeners(currentUser, isAdmin, isSuperAdmin);
-
-  // UI state
-  const [authTab, setAuthTab] = useState('login');
-  const [notification, setNotification] = useState(null);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [showUploadProgress, setShowUploadProgress] = useState(false);
-  const [initializationComplete, setInitializationComplete] = useState(false);
-
-  // CORRECCIÓ: Assegurar que l'usuari es registra correctament a Firestore
-  const ensureUserRegistered = useCallback(async (user) => {
-    if (!user) return;
-    
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      await setDoc(userRef, {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email?.split('@')[0] || 'Usuari',
-        lastSeen: serverTimestamp(),
-        isOnline: true,
-        createdAt: serverTimestamp()
-      }, { merge: true });
-      
-      console.log('✅ Usuari registrat/actualitzat a Firestore:', user.email);
-      
-      // CORRECCIÓ: També actualitzar userLocations per ser visible en el mapa
-      if (userLocation) {
-        const locationRef = doc(db, 'userLocations', user.uid);
-        await setDoc(locationRef, {
-          userId: user.uid,
-          userName: user.displayName || user.email?.split('@')[0] || 'Usuari',
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-          timestamp: serverTimestamp()
-        }, { merge: true });
-      }
-    } catch (error) {
-      console.error('❌ Error registrant usuari a Firestore:', error);
-    }
-  }, [userLocation]);
-
-  // CORRECCIÓ: Registrar usuari quan es connecta
+  // Initialize Firebase and set up authentication
   useEffect(() => {
-    if (currentUser && !authLoading) {
-      ensureUserRegistered(currentUser);
-    }
-  }, [currentUser, authLoading, ensureUserRegistered]);
-
-  // Memoitzar les funcions per evitar re-renders
-  const handleCreateRoute = useCallback(async (e) => {
-    e.preventDefault();
-    console.log('📤 Iniciant creació de ruta...');
-    
-    const formData = new FormData(e.target);
-    const name = formData.get('routeName')?.trim();
-    const description = formData.get('routeDescription')?.trim();
-    const gpxFile = formData.get('gpxFile');
-    
-    // Validations
-    if (!name) {
-      showNotification('El nom de la ruta és obligatori', 'error', setNotification);
-      return;
-    }
-    
-    if (!gpxFile) {
-      showNotification('Selecciona un arxiu GPX', 'error', setNotification);
-      return;
-    }
-
-    if (!gpxFile.name.toLowerCase().endsWith('.gpx')) {
-      showNotification('L\'arxiu ha de ser un fitxer GPX', 'error', setNotification);
-      return;
-    }
-
-    try {
-      setShowUploadProgress(true);
-      setUploadProgress(20);
-
-      const gpxText = await gpxFile.text();
-      setUploadProgress(50);
-      
-      const coordinates = parseGPX(gpxText);
-      setUploadProgress(80);
-      
-      if (coordinates.length === 0) {
-        throw new Error('No s\'han trobat coordenades vàlides al GPX');
-      }
-
-      if (coordinates.length < 2) {
-        throw new Error('El GPX ha de contenir almenys 2 punts per formar una ruta');
-      }
-      
-      // CORRECCIÓ: Assegurar format consistent de coordenades
-      const coordinateObjects = coordinates.map(coord => {
-        if (Array.isArray(coord)) {
-          return { lat: coord[0], lng: coord[1] };
-        }
-        return coord; // ja està en format {lat, lng}
-      });
-      
-      const routeData = {
-        name,
-        description: description || 'Sense descripció',
-        coordinates: coordinateObjects,
-        createdBy: currentUser.uid,
-        createdByName: currentUser.displayName || currentUser.email || 'Usuari',
-        gpxFileName: gpxFile.name,
-        pointsCount: coordinateObjects.length,
-        deleted: false,
-        active: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      };
-      
-      console.log('💾 Guardant ruta amb dades:', routeData);
-      const docRef = await addDoc(collection(db, 'routes'), routeData);
-      console.log('✅ Ruta guardada amb ID:', docRef.id);
-
-      setUploadProgress(100);
-      showNotification(`✅ Ruta "${name}" creada correctament amb ${coordinateObjects.length} punts!`, 'success', setNotification);
-
-      // Reset form
-      e.target.reset();
-      
-      // Refresh data després d'un petit delay
-      if (refreshData) {
-        setTimeout(() => {
-          console.log('🔄 Refrescant dades després de crear ruta...');
-          refreshData();
-        }, 1000);
-      }
-
-      setTimeout(() => {
-        setShowUploadProgress(false);
-        setUploadProgress(0);
-      }, 2000);
-
-    } catch (error) {
-      setShowUploadProgress(false);
-      setUploadProgress(0);
-      console.error('❌ Error creant ruta:', error);
-      showNotification('Error creant ruta: ' + error.message, 'error', setNotification);
-    }
-  }, [currentUser, refreshData]);
-
-  // Incident reporting
-  const reportIncident = useCallback(async () => {
-    console.log('🚨 Iniciant report d\'incidència...');
-    const message = prompt('Descriu la incidència (opcional):');
-    
-    try {
-      let location;
-      
+    const initializeFirebase = async () => {
       try {
-        location = await getCurrentLocation();
-        console.log('📍 Ubicació obtinguda per incidència:', location);
-      } catch (locationError) {
-        console.warn('⚠️ No s\'ha pogut obtenir ubicació actual, usant ubicació coneguda');
-        location = userLocation || {
-          latitude: 41.6722,
-          longitude: 2.4540
-        };
+        const env = import.meta.env || {};
+        console.log("VITE_FIREBASE_CONFIG:", env.VITE_FIREBASE_CONFIG);
+        console.log("VITE_APP_ID:", env.VITE_APP_ID);
+
+        const rawFirebaseConfig = env.VITE_FIREBASE_CONFIG;
+        const envAppId = env.VITE_APP_ID || 'default-app-id';
+        setAppId(envAppId);
+
+        let firebaseConfig = {};
+        if (rawFirebaseConfig) {
+          try {
+            firebaseConfig = JSON.parse(rawFirebaseConfig);
+          } catch (e) {
+            console.error("Error parsing VITE_FIREBASE_CONFIG:", e);
+            setMessageModalContent({
+              title: 'Error de Configuració',
+              message: `Hi ha un problema amb la configuració de Firebase. Assegura't que VITE_FIREBASE_CONFIG és un JSON vàlid. Detalls: ${e.message}`,
+              isConfirm: false,
+              onConfirm: () => setShowMessageModal(false),
+            });
+            setShowMessageModal(true);
+            setIsFirebaseReady(true);
+            setLoadingMessage('Error de configuració de Firebase.');
+            return;
+          }
+        }
+        
+        // If firebaseConfig is empty or invalid, proceed with dummy data
+        if (Object.keys(firebaseConfig).length === 0 || !firebaseConfig.projectId) {
+          console.warn("Firebase config not found or invalid. Using dummy data for local development.");
+          setIsFirebaseReady(true);
+          setLoadingMessage('Dades locals carregades (sense connexió a Firebase).');
+          return;
+        }
+
+        const app = initializeApp(firebaseConfig);
+        const firestoreDb = getFirestore(app);
+        const firebaseAuth = getAuth(app);
+
+        setDbInstance(firestoreDb);
+        setAuthInstance(firebaseAuth);
+
+        const initialAuthToken = env.VITE_INITIAL_AUTH_TOKEN || null;
+
+        if (initialAuthToken) {
+          await signInWithCustomToken(firebaseAuth, initialAuthToken);
+        } else {
+          await signInAnonymously(firebaseAuth);
+        }
+
+        onAuthStateChanged(firebaseAuth, (user) => {
+          if (user) {
+            setCurrentUserId(user.uid);
+          } else {
+            console.log("No user signed in. Data will not be loaded from Firestore.");
+            setLoadingMessage('No s\'ha pogut autenticar. Les dades no es desaran.');
+          }
+          setIsFirebaseReady(true); // Firebase auth state checked, ready to proceed
+        });
+
+      } catch (error) {
+        console.error("Firebase initialization or auth error:", error);
+        setLoadingMessage(`Error de càrrega: ${error.message}`);
+        setIsFirebaseReady(true);
       }
-      
-      const incidentData = {
-        userName: currentUser.displayName || currentUser.email || 'Usuari Anònim',
-        userEmail: currentUser.email || '',
-        userId: currentUser.uid,
-        message: message || 'Incidència reportada sense missatge',
-        location,
-        timestamp: serverTimestamp(),
-        resolved: false,
-        reportedBy: currentUser.uid,
-        type: 'user_report'
-      };
-      
-      console.log('💾 Guardant incidència:', incidentData);
-      const docRef = await addDoc(collection(db, 'incidents'), incidentData);
-      console.log('✅ Incidència guardada amb ID:', docRef.id);
-      
-      showNotification('🚨 Incidència reportada! Els administradors han estat notificats.', 'success', setNotification);
-      
-      // Refresh data
-      if (refreshData) {
-        setTimeout(() => {
-          console.log('🔄 Refrescant dades després de reportar incidència...');
-          refreshData();
-        }, 1000);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error reportant incidència:', error);
-      showNotification('❌ Error reportant incidència: ' + error.message, 'error', setNotification);
-    }
-  }, [currentUser, getCurrentLocation, userLocation, refreshData]);
-
-  // Debug info memoitzat
-  const debugInfo = useMemo(() => ({
-    // Estat d'autenticació
-    user: currentUser?.email || 'No autenticat',
-    isAdmin: isAdmin ? '✅' : '❌',
-    isSuperAdmin: isSuperAdmin ? '✅' : '❌',
-    
-    // Estats de càrrega
-    authLoading: authLoading ? '⏳' : '✅',
-    dataLoading: dataLoading ? '⏳' : '✅',
-    
-    // Dades - CORRECCIÓ: Verificar si són arrays vàlids
-    routes: (routes && Array.isArray(routes)) ? routes.length : 0,
-    activeUsers: (users && Array.isArray(users)) ? users.length : 0,
-    allUsers: (allUsers && Array.isArray(allUsers)) ? allUsers.length : 0,
-    incidents: (incidents && Array.isArray(incidents)) ? incidents.length : 0,
-    
-    // Ubicació
-    userLocation: userLocation ? '📍' : '❌',
-    isTracking: isTracking ? '✅' : '❌',
-    locationError: locationError || 'Cap',
-    
-    // Ruta actual
-    currentRoute: currentRoute?.name || 'Cap',
-    
-    // Errors
-    authError: authError || 'Cap',
-    dataError: dataError || 'Cap'
-  }), [currentUser, isAdmin, isSuperAdmin, authLoading, dataLoading, routes, users, allUsers, incidents, userLocation, isTracking, locationError, currentRoute, authError, dataError]);
-
-  // Log dels estats només quan canvien significativament
-  useEffect(() => {
-    console.log('📊 Estats actualitzats:', {
-      currentUser: currentUser?.email,
-      isAdmin,
-      isSuperAdmin,
-      authLoading,
-      dataLoading,
-      routesCount: (routes && Array.isArray(routes)) ? routes.length : 0,
-      usersCount: (users && Array.isArray(users)) ? users.length : 0,
-      incidentsCount: (incidents && Array.isArray(incidents)) ? incidents.length : 0,
-      authError,
-      dataError
-    });
-  }, [currentUser?.uid, isAdmin, isSuperAdmin, authLoading, dataLoading, routes?.length, users?.length, incidents?.length]);
-
-  // Initialize location tracking quan l'usuari es connecta
-  useEffect(() => {
-    if (currentUser && !isTracking && !authLoading) {
-      console.log('📍 Iniciant seguiment ubicació per:', currentUser.email);
-      startLocationTracking();
-    }
-  }, [currentUser?.uid, authLoading, isTracking, startLocationTracking]);
-
-  // CORRECCIÓ: Millor gestió del cicle d'inicialització
-  useEffect(() => {
-    if (currentUser && !authLoading && !dataLoading) {
-      if (!initializationComplete) {
-        console.log('🎯 Inicialització completa');
-        setInitializationComplete(true);
-      }
-    }
-  }, [currentUser, authLoading, dataLoading, initializationComplete]);
-
-  // Refresh automàtic OPTIMITZAT
-  useEffect(() => {
-    if (!initializationComplete || !refreshData) return;
-
-    console.log('⏰ Configurant refresc automàtic de dades');
-    const interval = setInterval(() => {
-      console.log('🔄 Refrescant dades automàticament...');
-      refreshData();
-    }, 30000); // Every 30 seconds
-
-    return () => {
-      console.log('🛑 Desactivant refresc automàtic');
-      clearInterval(interval);
     };
-  }, [initializationComplete, refreshData]);
 
-  // Show authentication errors
+    initializeFirebase();
+  }, []);
+
+  // Use the custom hook to fetch and manage Firestore data
+  const { programs, users, gyms, fixedSchedules, recurringSessions, scheduleOverrides, missedDays, setMissedDays, dataLoaded } = useFirestoreData(dbInstance, currentUserId, appId, isFirebaseReady, setLoadingMessage, setShowMessageModal, setMessageModalContent);
+
   useEffect(() => {
-    if (authError) {
-      console.error('❌ Error d\'autenticació:', authError);
-      showNotification(`Error d'autenticació: ${authError}`, 'error', setNotification);
+    if (isFirebaseReady && dataLoaded) {
+      setLoadingMessage('Dades carregades amb èxit!');
     }
-  }, [authError]);
+  }, [isFirebaseReady, dataLoaded]);
 
-  // Show data errors
-  useEffect(() => {
-    if (dataError) {
-      console.error('❌ Error de dades:', dataError);
-      showNotification(`Error carregant dades: ${dataError}`, 'error', setNotification);
+
+  const renderPage = () => {
+    if (!isFirebaseReady || !dataLoaded) { // Wait for Firebase to be ready and data to be loaded
+      return (
+        <div className="flex justify-center items-center min-h-[calc(100vh-100px)]">
+          <p className="text-xl text-gray-700">{loadingMessage}</p>
+        </div>
+      );
     }
-  }, [dataError]);
 
-  // Debug panel component memoitzat
-  const DebugPanel = useMemo(() => {
-    if (!isAdmin && !import.meta.env.DEV) return null;
-    
-    return (
-      <div className="fixed bottom-4 left-4 bg-black bg-opacity-90 text-white p-4 rounded-lg text-xs max-w-sm z-50 font-mono">
-        <div className="font-bold mb-3 text-yellow-400">🐛 Debug Panel</div>
-        
-        <div className="space-y-1">
-          <div><span className="text-blue-300">Usuari:</span> {debugInfo.user}</div>
-          <div><span className="text-blue-300">Admin:</span> {debugInfo.isAdmin}</div>
-          <div><span className="text-blue-300">Super Admin:</span> {debugInfo.isSuperAdmin}</div>
-        </div>
+    switch (currentPage) {
+      case 'dashboard':
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} setMissedDays={setMissedDays} />;
+      case 'programs':
+        return <Programs programs={programs} setCurrentPage={setCurrentPage} setSelectedProgramId={setSelectedProgramId} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+      case 'programDetail':
+        const program = programs.find(p => p.id === selectedProgramId);
+        return <ProgramDetail program={program} setCurrentPage={setCurrentPage} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+      case 'schedule':
+        return <Schedule programs={programs} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} users={users} gyms={gyms} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+      case 'users':
+        return <Users users={users} gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+      case 'gymsAndHolidays':
+        return <GymsAndHolidays gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+      case 'mixes':
+        return <Mixes programs={programs} />;
+      case 'settings':
+        return <Settings setCurrentPage={setCurrentPage} />;
+      case 'fixedScheduleManagement':
+        return <FixedScheduleManagement fixedSchedules={fixedSchedules} programs={programs} gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+      case 'recurringSessions':
+        return <RecurringSessions recurringSessions={recurringSessions} programs={programs} gyms={gyms} db={dbInstance} currentUserId={currentUserId} appId={appId} />;
+      case 'monthlyReport':
+        return <MonthlyReport programs={programs} gyms={gyms} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} scheduleOverrides={scheduleOverrides} missedDays={missedDays} />;
+      default:
+        return <Dashboard programs={programs} users={users} gyms={gyms} scheduleOverrides={scheduleOverrides} fixedSchedules={fixedSchedules} recurringSessions={recurringSessions} missedDays={missedDays} db={dbInstance} currentUserId={currentUserId} appId={appId} setMissedDays={setMissedDays} />;
+    }
+  };
 
-        <div className="border-t border-gray-600 my-2"></div>
-        
-        <div className="space-y-1">
-          <div><span className="text-green-300">Auth Loading:</span> {debugInfo.authLoading}</div>
-          <div><span className="text-green-300">Data Loading:</span> {debugInfo.dataLoading}</div>
-          <div><span className="text-green-300">Inicialitzat:</span> {initializationComplete ? '✅' : '❌'}</div>
-        </div>
+  return (
+    <div className="flex flex-col min-h-screen bg-gray-100 font-inter">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-        <div className="border-t border-gray-600 my-2"></div>
-        
-        <div className="space-y-1">
-          <div><span className="text-purple-300">Rutes:</span> {debugInfo.routes}</div>
-          <div><span className="text-purple-300">Usuaris Actius:</span> {debugInfo.activeUsers}</div>
-          <div><span className="text-purple-300">Tots Usuaris:</span> {debugInfo.allUsers}</div>
-          <div><span className="text-purple-300">Incidències:</span> {debugInfo.incidents}</div>
-        </div>
-
-        <div className="border-t border-gray-600 my-2"></div>
-        
-        <div className="space-y-1">
-          <div><span className="text-orange-300">Ubicació:</span> {debugInfo.userLocation}</div>
-          <div><span className="text-orange-300">Seguiment:</span> {debugInfo.isTracking}</div>
-          <div><span className="text-orange-300">Ruta:</span> {debugInfo.currentRoute}</div>
-        </div>
-
-        {(debugInfo.authError !== 'Cap' || debugInfo.dataError !== 'Cap') && (
-          <>
-            <div className="border-t border-gray-600 my-2"></div>
-            <div className="space-y-1 text-red-300">
-              {debugInfo.authError !== 'Cap' && <div>Auth Error: {debugInfo.authError}</div>}
-              {debugInfo.dataError !== 'Cap' && <div>Data Error: {debugInfo.dataError}</div>}
+      <nav className="bg-gradient-to-r from-blue-600 to-blue-800 p-4 shadow-lg">
+        <div className="container mx-auto flex justify-between items-center">
+          <h1 className="text-white text-2xl font-bold">Gym Instructor</h1>
+          {currentUserId && (
+            <div className="text-white text-sm">
+              ID d'usuari: <span className="font-mono text-blue-200">{currentUserId}</span>
             </div>
-          </>
-        )}
-
-        <div className="border-t border-gray-600 my-2"></div>
-        <button 
-          onClick={() => refreshData && refreshData()}
-          className="bg-blue-600 px-2 py-1 rounded text-xs hover:bg-blue-700 mr-2"
-        >
-          🔄 Refresh Data
-        </button>
-        <button 
-          onClick={() => setInitializationComplete(false)}
-          className="bg-orange-600 px-2 py-1 rounded text-xs hover:bg-orange-700"
-        >
-          🔄 Reinit
-        </button>
-      </div>
-    );
-  }, [debugInfo, isAdmin, refreshData, initializationComplete]);
-
-  // Loading screen inicial
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{background: '#f0f0f3'}}>
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-gray-300 border-t-yellow-400 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-xl text-gray-700 mb-2">Inicialitzant BikeGPS...</p>
-          <p className="text-sm text-gray-500">Connectant amb Firebase...</p>
-          {authError && (
-            <p className="text-red-500 text-sm mt-2">Error: {authError}</p>
           )}
-        </div>
-      </div>
-    );
-  }
-
-  // Auth screen
-  if (!currentUser) {
-    return (
-      <>
-        <AuthScreen
-          authTab={authTab}
-          setAuthTab={setAuthTab}
-          handleLogin={handleLogin}
-          handleRegister={handleRegister}
-          notification={notification}
-        />
-        {DebugPanel}
-      </>
-    );
-  }
-
-  // Data loading screen (after auth) - CORRECCIÓ: Reduir temps d'espera
-  if (dataLoading && !initializationComplete && routes === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{background: '#f0f0f3'}}>
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-gray-300 border-t-blue-400 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-xl text-gray-700 mb-2">Carregant dades...</p>
-          <p className="text-sm text-gray-500">Sincronitzant amb Firebase...</p>
-          <p className="text-xs text-gray-400 mt-2">Usuari: {currentUser.email}</p>
-          <div className="mt-4 text-xs text-gray-500">
-            <div>Rutes: {(routes && Array.isArray(routes)) ? routes.length : '⏳'}</div>
-            <div>Usuaris: {(users && Array.isArray(users)) ? users.length : '⏳'}</div>
-            <div>Incidències: {(incidents && Array.isArray(incidents)) ? incidents.length : '⏳'}</div>
+          <div className="space-x-4">
+            <button onClick={() => setCurrentPage('dashboard')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Dashboard</button>
+            <button onClick={() => setCurrentPage('programs')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Programes</button>
+            <button onClick={() => setCurrentPage('schedule')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Calendari</button>
+            <button onClick={() => setCurrentPage('users')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Usuaris</button>
+            <button onClick={() => setCurrentPage('mixes')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Mixos</button>
+            <button onClick={() => setCurrentPage('gymsAndHolidays')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Vacances</button>
+            <button onClick={() => setCurrentPage('monthlyReport')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Informe Mensual</button>
+            <button onClick={() => setCurrentPage('settings')} className="text-white hover:text-blue-200 transition-colors duration-200 font-medium">Configuració</button>
           </div>
         </div>
-      </div>
-    );
-  }
+      </nav>
 
-  // Admin dashboard
-  if (isAdmin) {
-    return (
-      <>
-        <AdminDashboard
-          currentUser={currentUser}
-          isSuperAdmin={isSuperAdmin}
-          routes={routes || []}
-          users={users || []}
-          incidents={incidents || []}
-          allUsers={allUsers || []}
-          currentRoute={currentRoute}
-          showUploadProgress={showUploadProgress}
-          uploadProgress={uploadProgress}
-          handleCreateRoute={handleCreateRoute}
-          selectRoute={selectRoute}
-          deleteRoute={deleteRoute}
-          resolveIncident={resolveIncident}
-          loadAllUsers={loadAllUsers}
-          makeUserAdmin={makeUserAdmin}
-          handleLogout={handleLogout}
-          mapInstanceRef={mapInstanceRef}
-          userLocation={userLocation}
-          notification={notification}
-          refreshData={refreshData}
+      <main className="flex-grow">
+        {renderPage()}
+      </main>
+
+      <footer className="bg-gray-800 text-white p-4 text-center text-sm">
+        <div className="container mx-auto">
+          © 2025 Gym Instructor App. Tots els drets reservats.
+        </div>
+      </footer>
+
+      {showMessageModal && (
+        <MessageModal
+          show={showMessageModal}
+          title={messageModalContent.title}
+          message={messageModalContent.message}
+          onConfirm={messageModalContent.onConfirm}
+          onCancel={messageModalContent.onCancel}
+          isConfirm={messageModalContent.isConfirm}
         />
-        {DebugPanel}
-      </>
-    );
-  }
-
-  // User dashboard
-  return (
-    <>
-      <UserDashboard
-        currentUser={currentUser}
-        routes={routes || []}
-        users={users || []}
-        incidents={incidents || []}
-        currentRoute={currentRoute}
-        routeProgress={routeProgress}
-        isReturning={isReturning}
-        selectRoute={selectRoute}
-        reportIncident={reportIncident}
-        handleLogout={handleLogout}
-        mapInstanceRef={mapInstanceRef}
-        userLocation={userLocation}
-        notification={notification}
-        refreshData={refreshData}
-      />
-      {DebugPanel}
-    </>
+      )}
+    </div>
   );
-};
+}
 
-export default BikeGPSApp;
+export default App;
